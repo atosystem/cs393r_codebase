@@ -130,7 +130,9 @@ void Navigation::Run() {
 
   // Eventually, you will have to set the control values to issue drive commands:
   // drive_msg_.curvature = ...;
-  // drive_msg_.velocity = ...;
+
+  // set velocity as 1.0 m/s
+  drive_msg_.velocity = 1.f;
 
   // Add timestamps to all messages.
   local_viz_msg_.header.stamp = ros::Time::now();
