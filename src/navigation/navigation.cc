@@ -112,7 +112,24 @@ void Navigation::ObservePointCloud(const vector<Vector2f>& cloud,
                                    double time) {
   point_cloud_ = cloud;                                     
 }
+void Navigation::RunAssign1() {
 
+  // 1. Generate possible curvatures (kinemetic constraint)
+  curvatures = GenerateCurvatures();
+  // 2. For each possible path:
+      // a. Compute Free Path Length
+      // b. Compute Clearance
+      // c. Compute Distance To Goal
+      // d. Compute total “score”
+  // 3. From all paths, pick path with best score
+  path = ChoosePath(curvatures);
+  // 4. Implement 1-D TOC on the chosen arc.
+  control = ComputeTOC(path);
+
+  drive_msg_.curvature = control.curvature;
+  drive_msg_.velocity = control.velocity;
+
+}
 void Navigation::Run() {
   // This function gets called 20 times a second to form the control loop.
   
@@ -127,6 +144,7 @@ void Navigation::Run() {
   // Feel free to make helper functions to structure the control appropriately.
   
   // The latest observed point cloud is accessible via "point_cloud_"
+
 
   // Eventually, you will have to set the control values to issue drive commands:
   // drive_msg_.curvature = ...;
