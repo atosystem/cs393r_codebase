@@ -113,6 +113,40 @@ void Navigation::ObservePointCloud(const vector<Vector2f>& cloud,
   point_cloud_ = cloud;                                     
 }
 
+float ComputeEuclideanDistance(const Vector2f& p1, const Vector2f& p2) {
+    float dx = p1.x() - p2.x();
+    float dy = p1.y() - p2.y();
+
+    return std::sqrt(dx * dx + dy * dy);
+}
+
+float ComputeClearance(float free_path_len, float curv) {
+  float min_clearance = FLOAT_MAX;
+  float c_max = ??
+  float turning_radius = 1 / curv;
+  Vector2f turning_center(0, turning_radius);
+  float min_r, max_r;
+
+  // straight line
+  for (auto point : point_cloud_) {
+    float cur_clearance = point.y() - CAR_WIDTH;
+  }
+
+  // turing 
+  for (auto point : point_cloud_) {
+    // TODO: if the point will affect the clearance
+    float cur_clearance;
+    if (ComputeEuclideanDistance(turning_center, point) > turning_radius) {
+      cur_clearance = ComputeEuclideanDistance(turning_center, point) - max_r;
+    } else {
+      cur_clearance = min_r - ComputeEuclideanDistance(turning_center, point);
+    }
+    min_clearance = min(min_clearance,cur_clearance);
+  }
+
+
+  return min_clearance;
+}
 Path Navigation::ChoosePath() {
  
   for curv
