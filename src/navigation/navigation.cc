@@ -112,10 +112,19 @@ void Navigation::ObservePointCloud(const vector<Vector2f>& cloud,
                                    double time) {
   point_cloud_ = cloud;                                     
 }
+
+Path Navigation::ChoosePath() {
+ 
+  for curv
+    float free_path_len = ComputeFreePathLength(curv);
+    float clearance = ComputeClearance(free_path_len, curv);
+    float score = free_path_len + w1 * clearance;
+
+}
 void Navigation::RunAssign1() {
 
   // 1. Generate possible curvatures (kinemetic constraint)
-  curvatures = GenerateCurvatures();
+  vector<float> curvatures = GenerateCurvatures();
   // 2. For each possible path:
       // a. Compute Free Path Length
       // b. Compute Clearance
@@ -123,8 +132,10 @@ void Navigation::RunAssign1() {
       // d. Compute total “score”
   // 3. From all paths, pick path with best score
   path = ChoosePath(curvatures);
+  // path.curvature, path.free_path_length
+
   // 4. Implement 1-D TOC on the chosen arc.
-  control = ComputeTOC(path);
+  control = ComputeTOC(path); // calculate velocity
 
   drive_msg_.curvature = control.curvature;
   drive_msg_.velocity = control.velocity;
