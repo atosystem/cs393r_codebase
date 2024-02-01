@@ -122,28 +122,30 @@ float ComputeEuclideanDistance(const Vector2f& p1, const Vector2f& p2) {
 
 float ComputeClearance(float free_path_len, float curv) {
   float min_clearance = FLOAT_MAX;
-  float c_max = ??
+  // float c_max = ??
   float turning_radius = 1 / curv;
   Vector2f turning_center(0, turning_radius);
-  float min_r, max_r;
+  float min_r = std::sqrt(pow(turning_radius + CAR_WIDTH / 2, 2))
+  float max_r = std::sqrt(pow(turning_radius + CAR_WIDTH / 2, 2) + pow((CAR_LENGTH + WHEEL_BASE) / 2, 2));
 
-  // straight line
-  for (auto point : point_cloud_) {
-    float cur_clearance = point.y() - CAR_WIDTH;
-  }
-
-  // turing 
-  for (auto point : point_cloud_) {
-    // TODO: if the point will affect the clearance
-    float cur_clearance;
-    if (ComputeEuclideanDistance(turning_center, point) > turning_radius) {
-      cur_clearance = ComputeEuclideanDistance(turning_center, point) - max_r;
-    } else {
-      cur_clearance = min_r - ComputeEuclideanDistance(turning_center, point);
+  if (curv == 0) {    // straight line
+    for (auto point : point_cloud_) {
+      float cur_clearance = point.y() - CAR_WIDTH;
+      min_clearance = min(min_clearance,cur_clearance);
     }
-    min_clearance = min(min_clearance,cur_clearance);
-  }
 
+  } else { // turing 
+    for (auto point : point_cloud_) {
+      // TODO: if the point will affect the clearance
+      float cur_clearance;
+      if (ComputeEuclideanDistance(turning_center, point) > turning_radius) {
+        cur_clearance = ComputeEuclideanDistance(turning_center, point) - max_r;
+      } else {
+        cur_clearance = min_r - ComputeEuclideanDistance(turning_center, point);
+      }
+      min_clearance = min(min_clearance,cur_clearance);
+    }
+  }
 
   return min_clearance;
 }
