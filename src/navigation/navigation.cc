@@ -113,6 +113,30 @@ void Navigation::ObservePointCloud(const vector<Vector2f>& cloud,
   point_cloud_ = cloud;                                     
 }
 
+void Navigation::GenerateCurvatures(int num_samples = 100) {
+  static constexpr float min_curvature = -max_curvature;
+  curvatures_.resize(num_samples);
+  for (int i = 0; i < num_samples; i++) {
+    curvatures_[i] = min_curvature + i * (max_curvature - min_curvature) / num_samples;
+  }
+  return;
+}
+
+float Navigation::ComputeTOC(float free_path_length) {
+  float velocity = robot_vel_.norm();
+  float min_dist = velocity * velocity / (2 * max_acceleration);
+
+  if (free_path_length <= min_dist) {
+    return velocity - dt * max_acceleration;
+  }
+
+  if (velocity < max_speed) {
+    return velocity + dt * max_acceleration;
+  }
+
+  return max_speed;
+}
+
 void Navigation::Run() {
   // This function gets called 20 times a second to form the control loop.
   
