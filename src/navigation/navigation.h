@@ -67,6 +67,20 @@ class Navigation {
   // Used to set the next target pose.
   void SetNavGoal(const Eigen::Vector2f& loc, float angle);
 
+  void Navigation::RunAssign1();
+
+  PathOption ChoosePath(const vector<float> &curvatures);
+
+  float ComputeFreePathLength(float curvature);
+ 
+  // car params
+  const float car_l = 0.535;
+  const float car_w = 0.281;
+  const float car_b = 0.324;
+  const float car_c_max = 1;
+  const float car_margin = 0.3;
+
+
  private:
 
   // Whether odometry has been initialized.
