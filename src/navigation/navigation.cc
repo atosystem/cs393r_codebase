@@ -219,9 +219,20 @@ float Navigation::ComputeFreePathLength(float curvature) {
   // const float r_2 = (center_pt - car_outter_rear_pt ).norm();
 
   float free_path_length = 1000.0;
-  float best_angle = 0;
-  Vector2f best_pt(0,0);
-  float best_r = 0;
+  //float best_angle = 0;
+  //Vector2f best_pt(0,0);
+  //float best_r = 0;
+  /*
+visualization::DrawArc(
+                    center_pt,
+                    r,
+                    1.5 * 3.14,
+                    0,
+                  0x808080,
+                 local_viz_msg_
+                 );
+		 */
+  visualization::DrawPathOption(curvature,1,5,0x808080,false,local_viz_msg_);
   for (auto point : point_cloud_) {
     //visualization::DrawCross(point,0.2,2,local_viz_msg_); 
     // whether the car will hit the point
@@ -253,7 +264,8 @@ float Navigation::ComputeFreePathLength(float curvature) {
       float cur_free_path_length = (theta - omega) * r; // turning_angle * r
 
       //std::cout<<"cur_free_path_length="<<cur_free_path_length<<" free_path_length="<<free_path_length<<"\n";
-      //free_path_length = std::min(free_path_length, cur_free_path_length);
+      free_path_length = std::min(free_path_length, cur_free_path_length);
+      /*
       if (cur_free_path_length < free_path_length) {
 
 	    std::cout<<"collision!\n";
@@ -263,13 +275,16 @@ float Navigation::ComputeFreePathLength(float curvature) {
 	      best_pt.x() = point.x();
 	      best_pt.y() = point.y();
       }
+      */
     } 
 
   }
+  /*
   if (best_angle != 0) {
-	  std::cout<<"asd\n";
-	  std::cout<<atan2(best_pt.x(),best_pt.y())<<"\n";
-	  std::cout<<"angle "<<best_angle<<"\n";
+          //std::cout<<"asd\n";
+	  //std::cout<<atan2(best_pt.x(),best_pt.y())<<"\n";
+	  //std::cout<<"angle "<<best_angle<<"\n";
+	  visualization::DrawPathOption(curvature,free_path_length,5,0x00FFFF,false,local_viz_msg_);
     visualization::DrawArc(
 		    center_pt,
 		    best_r,
@@ -279,6 +294,9 @@ float Navigation::ComputeFreePathLength(float curvature) {
 		 local_viz_msg_
 		 ); 
   }
+*/
+
+	  visualization::DrawPathOption(curvature,free_path_length,5,0x00FFFF,false,local_viz_msg_);
   return free_path_length;
 
 
@@ -384,18 +402,21 @@ void Navigation::RunAssign1() {
   drive_msg_.velocity = 0;
 }
 void Navigation::GenerateCurvatures(int num_samples = 100) {
-  //static constexpr float min_curvature = -CAR_CMAX;
-  //curvatures_.resize(num_samples);
+  static constexpr float min_curvature = -CAR_CMAX;
+  curvatures_.resize(num_samples);
+ /* 
   curvatures_.resize(5);
   curvatures_[0] = 1;
   curvatures_[1] = 0.8;
-  // curvatures_[0] = 0.8;
   curvatures_[2] = 0.6;
   curvatures_[3] = 0.4;
   curvatures_[4] = 0.2;
-  //for (int i = 0; i < num_samples; i++) {
-  //  curvatures_[i] = min_curvature + i * (CAR_CMAX - min_curvature) / num_samples;
-  //}
+  */
+//	curvatures_.resize(5);
+//	curvatures_[0] = 0.8;
+  for (int i = 0; i < num_samples; i++) {
+    curvatures_[i] = min_curvature + i * (CAR_CMAX - min_curvature) / num_samples;
+  }
   return;
 }
 
