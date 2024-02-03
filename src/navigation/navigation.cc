@@ -475,7 +475,7 @@ void Navigation::Run() {
   // visualization
   // car + margin
   drawCar(true);
-
+  drawPointCloud();
   // Eventually, you will have to set the control values to issue drive commands:
   // drive_msg_.curvature = ...;
   // drive_msg_.velocity = ...;
