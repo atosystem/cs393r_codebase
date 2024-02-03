@@ -149,7 +149,7 @@ float ComputeClearance(float free_path_len, float curv) {
 
   return min_clearance;
 }
-PathOption Navigation::ChoosePath(vector<PathOption> candidate_paths) {
+PathOption Navigation::ChoosePath(vector<float> candidate_curvs) {
  
   // PathOption return_path;
 
@@ -157,8 +157,7 @@ PathOption Navigation::ChoosePath(vector<PathOption> candidate_paths) {
   PathOption best_path;
   float score_w = 0.5; // hyper-param
 
-  for (auto path : candidate_paths) {
-    float _curv = path.curvature;
+  for (auto _curv : candidate_curvs) {
     float free_path_len = ComputeFreePathLength(_curv);
     float clearance = ComputeClearance(free_path_len, _curv);
     float score = free_path_len + score_w * clearance;
@@ -334,23 +333,48 @@ float Navigation::ComputeFreePathLength(float curvature) {
 void Navigation::RunAssign1() {
 
   // 1. Generate possible curvatures (kinemetic constraint)
-  vector<float> curvatures = GenerateCurvatures();
+  int num_samples = 10; // ?
+  if (curvatures_.empty()) GenerateCurvatures(num_samples);
   // 2. For each possible path:
       // a. Compute Free Path Length
       // b. Compute Clearance
       // c. Compute Distance To Goal
       // d. Compute total “score”
   // 3. From all paths, pick path with best score
-  path = ChoosePath(curvatures);
+  PathOption chosen_path = ChoosePath(curvatures_);
   // path.curvature, path.free_path_length
 
   // 4. Implement 1-D TOC on the chosen arc.
-  control = ComputeTOC(path); // calculate velocity
+  float velocity = ComputeTOC(chosen_path.free_path_length); // calculate velocity
 
-  drive_msg_.curvature = control.curvature;
-  drive_msg_.velocity = control.velocity;
+  drive_msg_.curvature = chosen_path.curvature;
+  drive_msg_.velocity = velocity;
 
 }
+void Navigation::GenerateCurvatures(int num_samples = 100) {
+  static constexpr float min_curvature = -CAR_CMAX;
+  curvatures_.resize(num_samples);
+  for (int i = 0; i < num_samples; i++) {
+    curvatures_[i] = min_curvature + i * (CAR_CMAX - min_curvature) / num_samples;
+  }
+  return;
+}
+
+float Navigation::ComputeTOC(float free_path_length) {
+  float velocity = robot_vel_.norm();
+  float min_dist = velocity * velocity / (2 * max_acceleration);
+
+  if (free_path_length <= min_dist) {
+    return velocity - dt * max_acceleration;
+  }
+
+  if (velocity < max_speed) {
+    return velocity + dt * max_acceleration;
+  }
+
+  return max_speed;
+}
+
 void Navigation::Run() {
   // This function gets called 20 times a second to form the control loop.
   
@@ -370,6 +394,7 @@ void Navigation::Run() {
   // Eventually, you will have to set the control values to issue drive commands:
   // drive_msg_.curvature = ...;
   // drive_msg_.velocity = ...;
+  RunAssign1();
 
   // Add timestamps to all messages.
   local_viz_msg_.header.stamp = ros::Time::now();

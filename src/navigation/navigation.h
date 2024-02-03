@@ -28,6 +28,8 @@
 #ifndef NAVIGATION_H
 #define NAVIGATION_H
 
+using std::vector;
+
 namespace ros {
   class NodeHandle;
 }  // namespace ros
@@ -79,9 +81,15 @@ class Navigation {
   PathOption ChoosePath(const vector<float> &curvatures);
 
   float ComputeFreePathLength(float curvature);
+  float ComputeClearance(float free_path_len, float curv);
  
   
 
+  // Sample candidate curvatures. Only needed for the first time
+  void GenerateCurvatures(int num_samples);
+
+  // Compute control commands based on free path length
+  float Navigation::ComputeTOC(float free_path_length);
 
  private:
 
@@ -116,6 +124,15 @@ class Navigation {
   float nav_goal_angle_;
   // Map of the environment.
   vector_map::VectorMap map_;
+
+  // Generated curvatures
+  vector<float> curvatures_;
+
+  // Configuration
+  static constexpr float dt = 0.05f;
+  static constexpr float max_speed = 1.f;
+  static constexpr float max_curvature = 1.f / 0.98f;
+  static constexpr float max_acceleration = 4.f;
 };
 
 }  // namespace navigation
