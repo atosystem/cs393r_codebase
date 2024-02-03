@@ -116,17 +116,19 @@ void Navigation::ObservePointCloud(const vector<Vector2f>& cloud,
 
 float Navigation::ComputeClearance(float free_path_len, float curv) {
   float min_clearance = 1000.0;
-  // float c_max = ??
-  float r = 1.0 / curv;
-  float car_inner_y = CAR_WIDTH / 2.0 + SAFETY_MARGIN;
-  float car_outter_y = -car_inner_y;
-  float car_front_x = (CAR_BASE + CAR_LENGTH) / 2.0 + SAFETY_MARGIN;
+  float r = 1.0 / std::abs(curv);
+  float turning_angle = free_path_len / r; // len = r * turning_angle
+  float c_max = 3;
+
+  // float car_inner_y = CAR_WIDTH / 2.0 + SAFETY_MARGIN;
+  // float car_outter_y = -car_inner_y;
+  // float car_front_x = (CAR_BASE + CAR_LENGTH) / 2.0 + SAFETY_MARGIN;
   
   const Vector2f center_pt = Vector2f(0,r);  // turning instant center
-  const Vector2f car_outter_front_pt = Vector2f(car_front_x,car_outter_y);
+  // const Vector2f car_outter_front_pt = Vector2f(car_front_x,car_outter_y);
   
-  const float r_min = r - (CAR_WIDTH / 2.0 + SAFETY_MARGIN);
-  const float r_max = (center_pt - car_outter_front_pt ).norm();
+  // const float r_min = r - (CAR_WIDTH / 2.0 + SAFETY_MARGIN);
+  // const float r_max = (center_pt - car_outter_front_pt ).norm();
 
   if (curv == 0) {    // straight line
     for (auto point : point_cloud_) {
@@ -135,19 +137,29 @@ float Navigation::ComputeClearance(float free_path_len, float curv) {
     }
 
   } else { // turing 
+    
+    // filter not affect point
+  
+
     for (auto point : point_cloud_) {
       // TODO: if the point will affect the clearance
       float cur_clearance;
       float center_to_point_dist = (center_pt - point).norm();
-      if (center_to_point_dist > r) { // |c-p| > r
-        cur_clearance = center_to_point_dist - r_max; // |c-p| - rmax
-      } else {
-        cur_clearance = r_min - center_to_point_dist;
+      // cout << "center_to_point_dist, r: " << center_to_point_dist << ", " << r << endl;
+      float p_angle = atan2(point.x(), r - point.y()); // angle: init baselink, center, p
+      // cout << "turning_angle, p_angle: " << turning_angle << ", " << p_angle << endl;
+      if (std::abs(center_to_point_dist - r) > c_max || p_angle < 0 || p_angle > turning_angle) { // TODO: condition on turning_angle is an assumption
+        continue;
+      }
+      cur_clearance = std::abs(center_to_point_dist - r); // |c-p| - rmax
+      // cout << "curv, x, clearance: " << curv << ", " << point.x() << ", " << cur_clearance << endl;
+      if (cur_clearance < min_clearance) {
+          cout << "min_clearance, x, center_to_point_dist: " << min_clearance << ", " << point.x() << ", " << center_to_point_dist << endl;
       }
       min_clearance = std::min(min_clearance,cur_clearance);
     }
   }
-
+  // cout << "============/=======\n";
   return min_clearance;
 }
 PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs) {
@@ -156,18 +168,17 @@ PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs) {
 
   float highest_score = -1;
   PathOption best_path;
-  float score_w = 0; // hyper-param
-
-  std::cout<<"[Begin]\n";
+  float score_clearance = 0; // hyper-param
+  float score_curv = -2;
   for (auto _curv : candidate_curvs) {
     // draw options (gray)
-    visualization::DrawPathOption(_curv,1,5,0x808080,false,local_viz_msg_);
+    // visualization::DrawPathOption(_curv,1,5,0x808080,false,local_viz_msg_);
 
     float free_path_len = ComputeFreePathLength(_curv);
     float clearance = ComputeClearance(free_path_len, _curv);
-    float score = free_path_len + score_w * clearance - PENALTY_CURVE * 1.0 * std::abs(_curv);
-    std::cout<<"C="<<_curv<<" Score="<<score<<"\n";
-    //float score = free_path_len + score_w * clearance;
+    // float score = free_path_len + score_w * clearance - PENALTY_CURVE * std::abs(_curv);
+    visualization::DrawPathOption(_curv, free_path_len, clearance, 0xFF0000, false, local_viz_msg_);
+    float score = free_path_len + score_clearance * clearance + score_curv * std::abs(_curv);
     if (score > highest_score) {
       highest_score = score;
       best_path.curvature = _curv;
@@ -175,10 +186,9 @@ PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs) {
       best_path.free_path_length = free_path_len;
     }
   }
-  std::cout<<"[End]\n";
   // visualize the selected path (red)
   //std::cout<<"Score "<<highest_score<<"\n";
-  visualization::DrawPathOption(best_path.curvature,best_path.curvature,best_path.clearance,0xFF0000,false,local_viz_msg_);
+  // visualization::DrawPathOption(best_path.curvature,best_path.free_path_length,best_path.clearance,0xFF0000,false,local_viz_msg_);
   // just for an example
   // return_path.curvature = best_curv;
   // return_path.clearance = 1.4;
@@ -311,22 +321,21 @@ visualization::DrawArc(
   
   /*
   if (best_angle != 0) {
-          //std::cout<<"asd\n";
-	  //std::cout<<atan2(best_pt.x(),best_pt.y())<<"\n";
-	  //std::cout<<"angle "<<best_angle<<"\n";
-	  visualization::DrawPathOption(curvature,free_path_length,5,0x00FFFF,false,local_viz_msg_);
-    visualization::DrawArc(
-		    center_pt,
-		    best_r,
-		    atan2(best_pt.x(),best_pt.y()-r) - best_angle,
-		   atan2(best_pt.x(), best_pt.y() - r),
-		  0xFF0000,
-		 local_viz_msg_
-		 ); 
+	  std::cout<<"asd\n";
+	  std::cout<<atan2(best_pt.x(),best_pt.y())<<"\n";
+	  std::cout<<"angle , r"<<best_angle<<best_r<<"\n";
+    // visualization::DrawArc(
+		//     center_pt,
+		//     best_r,
+		//     atan2(best_pt.x(),best_pt.y()-r) - best_angle,
+		//    atan2(best_pt.x(), best_pt.y() - r),
+		//   0xFF0000,
+		//  local_viz_msg_
+		//  ); 
   }
 */
   // draw free path length along the curve (cyan)
-  visualization::DrawPathOption(curvature,free_path_length,5,0x00FFFF,false,local_viz_msg_);
+  // visualization::DrawPathOption(curvature,free_path_length,5,0x00FFFF,false,local_viz_msg_);
   return free_path_length;
 
 
