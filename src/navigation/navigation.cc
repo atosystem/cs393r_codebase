@@ -114,10 +114,11 @@ void Navigation::ObservePointCloud(const vector<Vector2f>& cloud,
 }
 
 
-float ComputeClearance(float free_path_len, float curv) {
+float Navigation::ComputeClearance(float free_path_len, float curv) {
   float min_clearance = 1000.0;
   // float c_max = ??
   float r = 1.0 / curv;
+  float car_inner_y = CAR_WIDTH / 2.0 + SAFETY_MARGIN;
   float car_outter_y = -car_inner_y;
   float car_front_x = (CAR_BASE + CAR_LENGTH) / 2.0 + SAFETY_MARGIN;
   
@@ -130,7 +131,7 @@ float ComputeClearance(float free_path_len, float curv) {
   if (curv == 0) {    // straight line
     for (auto point : point_cloud_) {
       float cur_clearance = point.y() - CAR_WIDTH;
-      min_clearance = min(min_clearance,cur_clearance);
+      min_clearance = std::min(min_clearance,cur_clearance);
     }
 
   } else { // turing 
@@ -143,13 +144,13 @@ float ComputeClearance(float free_path_len, float curv) {
       } else {
         cur_clearance = r_min - center_to_point_dist;
       }
-      min_clearance = min(min_clearance,cur_clearance);
+      min_clearance = std::min(min_clearance,cur_clearance);
     }
   }
 
   return min_clearance;
 }
-PathOption Navigation::ChoosePath(vector<float> candidate_curvs) {
+PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs) {
  
   // PathOption return_path;
 
@@ -165,7 +166,7 @@ PathOption Navigation::ChoosePath(vector<float> candidate_curvs) {
       highest_score = score;
       best_path.curvature = _curv;
       best_path.clearance = clearance;
-      best_path.free_path_len = free_path_len;
+      best_path.free_path_length = free_path_len;
     }
   }
 
@@ -181,7 +182,7 @@ PathOption Navigation::ChoosePath(vector<float> candidate_curvs) {
 }
 
 float Navigation::ComputeFreePathLength(float curvature) {
-  """notation
+   /* notation
   Angle
     theta: turing angle
   Radius
@@ -194,26 +195,26 @@ float Navigation::ComputeFreePathLength(float curvature) {
     |                |
     *----------------*
    outer_rear(r2)    outer_front(rmax)
-  """
+  */
   // Car points (baselink frame)
-  float car_inner_y = CAR_WIDTH / 2.0 + SAFETY_MARGIN
+  float car_inner_y = CAR_WIDTH / 2.0 + SAFETY_MARGIN;
   float car_outter_y = -car_inner_y;
   float car_front_x = (CAR_BASE + CAR_LENGTH) / 2.0 + SAFETY_MARGIN;
-  float car_rear_x = -(CAR_LENGTH - CAR_BASE) / 2.0 - SAFETY_MARGIN;
+  // float car_rear_x = -(CAR_LENGTH - CAR_BASE) / 2.0 - SAFETY_MARGIN;
   
   const float r = 1.0 / curvature;
 
   const Vector2f center_pt = Vector2f(0,r);  // turning instant center
   const Vector2f car_inner_front_pt = Vector2f(car_front_x,car_inner_y);
   const Vector2f car_outter_front_pt = Vector2f(car_front_x,car_outter_y);
-  const Vector2f car_inner_rear_pt = Vector2f(car_rear_x,car_inner_y);
-  const Vector2f car_outter_rear_pt = Vector2f(car_rear_x,car_outter_y);
+  // const Vector2f car_inner_rear_pt = Vector2f(car_rear_x,car_inner_y);
+  // const Vector2f car_outter_rear_pt = Vector2f(car_rear_x,car_outter_y);
 
 
   const float r_min = r - (CAR_WIDTH / 2.0 + SAFETY_MARGIN);
   const float r_max = (center_pt - car_outter_front_pt ).norm();
   const float r_1 = (center_pt - car_inner_front_pt ).norm();
-  const float r_2 = (center_pt - car_outter_rear_pt ).norm();
+  // const float r_2 = (center_pt - car_outter_rear_pt ).norm();
 
   float free_path_length = 1000.0;
   for (auto point : point_cloud_) {
@@ -225,16 +226,16 @@ float Navigation::ComputeFreePathLength(float curvature) {
     float r_p = (center_pt - point).norm();
 
     // angle: point angle, init base_link -> point
-    float theta = atan2(point.x() / (r - point.y())); // atan2(x / (r-y))
+    float theta = atan2(point.x() ,  (r - point.y())); // atan2(x / (r-y))
     // angle: new base_link -> point
     float omega; 
 
     if (theta > 0 && r_p >= r_1 && r_p <= r_max) { 
       // front side
-      omega = asin2(car_front_x / r_p); // asin(h/rp)
+      omega = asin(car_front_x / r_p); // asin(h/rp)
     } else if (theta > 0 && r_p >= r_min && r_p <= r_1) {
       // inner side
-      omega = acos2((r - (CAR_WIDTH / 2 + SAFETY_MARGIN)) / r_p); // acos(r-w/2 / rp)
+      omega = acos((r - (CAR_WIDTH / 2 + SAFETY_MARGIN)) / r_p); // acos(r-w/2 / rp)
     } else {
       // case 3, or no collision
       collision = false;
@@ -243,7 +244,7 @@ float Navigation::ComputeFreePathLength(float curvature) {
     if (collision) {
       //  turning angle: init base_link -> new base_link = theta - omega
       float cur_free_path_length = (theta - omega) * r; // turning_angle * r
-      free_path_length = min(free_path_length, cur_free_path_length);
+      free_path_length = std::min(free_path_length, cur_free_path_length);
     } 
 
   }

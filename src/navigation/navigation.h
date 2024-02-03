@@ -28,6 +28,12 @@
 #ifndef NAVIGATION_H
 #define NAVIGATION_H
 
+#define CAR_LENGTH 0.535
+#define CAR_WIDTH 0.281
+#define CAR_BASE 0.324
+#define CAR_CMAX 1
+#define SAFETY_MARGIN 0.3
+
 using std::vector;
 
 namespace ros {
@@ -37,11 +43,11 @@ namespace ros {
 namespace navigation {
 
 // car params
-const float CAR_LENGTH = 0.535;
-const float CAR_WIDTH = 0.281;
-const float CAR_BASE = 0.324;
-const float CAR_CMAX = 1;
-const float SAFETY_MARGIN = 0.3;
+// const float CAR_LENGTH = 0.535;
+// const float CAR_WIDTH = 0.281;
+// const float CAR_BASE = 0.324;
+// const float CAR_CMAX = 1;
+// const float SAFETY_MARGIN = 0.3;
 
 struct PathOption {
   float curvature;
@@ -76,7 +82,7 @@ class Navigation {
   // Used to set the next target pose.
   void SetNavGoal(const Eigen::Vector2f& loc, float angle);
 
-  void Navigation::RunAssign1();
+  void RunAssign1();
 
   PathOption ChoosePath(const vector<float> &curvatures);
 
@@ -89,7 +95,7 @@ class Navigation {
   void GenerateCurvatures(int num_samples);
 
   // Compute control commands based on free path length
-  float Navigation::ComputeTOC(float free_path_length);
+  float ComputeTOC(float free_path_length);
 
  private:
 
