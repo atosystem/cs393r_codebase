@@ -35,7 +35,7 @@
 #define SAFETY_MARGIN 0.3
 
 // heuristic 
-#define PENALTY_CURVE 0.3
+#define PENALTY_CURVE  2
 
 using std::vector;
 

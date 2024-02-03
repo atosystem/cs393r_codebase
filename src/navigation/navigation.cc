@@ -158,14 +158,16 @@ PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs) {
   PathOption best_path;
   float score_w = 0; // hyper-param
 
+  std::cout<<"[Begin]\n";
   for (auto _curv : candidate_curvs) {
     // draw options (gray)
     visualization::DrawPathOption(_curv,1,5,0x808080,false,local_viz_msg_);
 
     float free_path_len = ComputeFreePathLength(_curv);
     float clearance = ComputeClearance(free_path_len, _curv);
-    // float score = free_path_len + score_w * clearance - PENALTY_CURVE * std::abs(_curv);
-    float score = free_path_len + score_w * clearance;
+    float score = free_path_len + score_w * clearance - PENALTY_CURVE * 1.0 * std::abs(_curv);
+    std::cout<<"C="<<_curv<<" Score="<<score<<"\n";
+    //float score = free_path_len + score_w * clearance;
     if (score > highest_score) {
       highest_score = score;
       best_path.curvature = _curv;
@@ -173,7 +175,10 @@ PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs) {
       best_path.free_path_length = free_path_len;
     }
   }
-
+  std::cout<<"[End]\n";
+  // visualize the selected path (red)
+  //std::cout<<"Score "<<highest_score<<"\n";
+  visualization::DrawPathOption(best_path.curvature,best_path.curvature,best_path.clearance,0xFF0000,false,local_viz_msg_);
   // just for an example
   // return_path.curvature = best_curv;
   // return_path.clearance = 1.4;
@@ -208,25 +213,28 @@ float Navigation::ComputeFreePathLength(float curvature) {
   
   
 
-  const Vector2f center_pt = Vector2f(0,r);  // turning instant center
-  const Vector2f car_inner_front_pt = Vector2f(car_front_x,car_inner_y);
-  const Vector2f car_outter_front_pt = Vector2f(car_front_x,car_outter_y);
-  //const Vector2f car_inner_rear_pt = Vector2f(car_rear_x,car_inner_y);
-  //const Vector2f car_outter_rear_pt = Vector2f(car_rear_x,car_outter_y);
 
 
-  float free_path_length = 1000.0;
+  float free_path_length = 10.0;
 
   if (curvature==0) {
     // go straight
     for (auto point : point_cloud_) {
       if (point.y() <= car_inner_y && point.y() >= car_outter_y && point.x() >= car_front_x) {
-        free_path_length = std::min(free_path_length, point.x() - car_front_x )
+        free_path_length = std::min(free_path_length, point.x() - car_front_x );
       }
-
+    }
   } else {
     // go curve
     const float r = 1.0 / curvature;
+    const Vector2f center_pt = Vector2f(0,r);  // turning instant center
+    const Vector2f car_inner_front_pt = Vector2f(car_front_x,car_inner_y);
+    const Vector2f car_outter_front_pt = Vector2f(car_front_x,car_outter_y);
+    //const Vector2f car_inner_rear_pt = Vector2f(car_rear_x,car_inner_y);
+    //const Vector2f car_outter_rear_pt = Vector2f(car_rear_x,car_outter_y);
+
+
+
     const float r_min = r - (CAR_WIDTH / 2.0 + SAFETY_MARGIN);
     const float r_max = (center_pt - car_outter_front_pt ).norm();
     const float r_1 = (center_pt - car_inner_front_pt ).norm();
@@ -421,10 +429,9 @@ void Navigation::RunAssign1() {
 
   drive_msg_.curvature = chosen_path.curvature;
   drive_msg_.velocity = velocity;
-  drive_msg_.velocity = 0;
 }
 void Navigation::GenerateCurvatures(int num_samples = 100) {
-  static constexpr float min_curvature = -CAR_CMAX;
+ //static constexpr float min_curvature = -CAR_CMAX;
   
  /* 
   curvatures_.resize(5);
@@ -440,9 +447,12 @@ void Navigation::GenerateCurvatures(int num_samples = 100) {
     num_samples += 1;
   }
   curvatures_.resize(num_samples);
+  std::cout<<"Total samples="<<num_samples<<"\n";
   // half of samples
   num_samples = (num_samples - 1) / 2;
-  float _delta = CAR_CMAX / num_samples;
+  std::cout<<"half samples="<<num_samples<<"\n";
+  float _delta = CAR_CMAX * 1.0 / num_samples;
+  std::cout<<"delta="<<_delta<<"\n";
   // straight line
   curvatures_[0] = 0;
   for (int i = 0; i < num_samples; ++i) {

@@ -116,6 +116,7 @@ void LaserCallback(const sensor_msgs::LaserScan& msg) {
 
   navigation_->ObservePointCloud(point_cloud_, msg.header.stamp.toSec());
   last_laser_msg_ = msg;
+  //std::cout<<"Max Range="<<msg.range_max<<"\n";
 }
 
 void OdometryCallback(const nav_msgs::Odometry& msg) {
