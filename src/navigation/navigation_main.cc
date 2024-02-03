@@ -97,8 +97,7 @@ void LaserCallback(const sensor_msgs::LaserScan& msg) {
 
   // clear previous data
   point_cloud_.clear();
-
-  // angle for ranges[i]: msg.angle_min + msg.angle_increment * i
+  
   float current_angle = msg.angle_min - msg.angle_increment;
   unsigned int N = floor(( msg.angle_max - msg.angle_min) / msg.angle_increment);
   for (unsigned int i = 0 ;i < N; ++i )

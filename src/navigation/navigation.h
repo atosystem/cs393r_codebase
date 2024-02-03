@@ -100,6 +100,10 @@ class Navigation {
   // Compute control commands based on free path length
   float ComputeTOC(float free_path_length);
 
+  // for testing
+  // visualization
+  void drawCar(bool withMargin);
+  void drawPointCloud();
  private:
 
   // Whether odometry has been initialized.

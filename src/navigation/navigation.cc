@@ -212,11 +212,6 @@ float Navigation::ComputeFreePathLength(float curvature) {
   const Vector2f car_inner_rear_pt = Vector2f(car_rear_x,car_inner_y);
   const Vector2f car_outter_rear_pt = Vector2f(car_rear_x,car_outter_y);
 
-  visualization::DrawLine(car_inner_front_pt,car_outter_front_pt,0, local_viz_msg_);
-  visualization::DrawLine(car_outter_rear_pt,car_outter_front_pt,0, local_viz_msg_);
-  visualization::DrawLine(car_inner_front_pt,car_inner_rear_pt,0, local_viz_msg_);
-  visualization::DrawLine(car_inner_rear_pt,car_outter_rear_pt,0, local_viz_msg_);
-
 
   const float r_min = r - (CAR_WIDTH / 2.0 + SAFETY_MARGIN);
   const float r_max = (center_pt - car_outter_front_pt ).norm();
@@ -369,9 +364,6 @@ float Navigation::ComputeFreePathLength(float curvature) {
 
 void Navigation::RunAssign1() {
 
-	for (auto point : point_cloud_) {
-    visualization::DrawCross(point,0.2,2,local_viz_msg_);
-	}
   // 1. Generate possible curvatures (kinemetic constraint)
   int num_samples = 10; // ?
   if (curvatures_.empty()) GenerateCurvatures(num_samples);
@@ -394,13 +386,13 @@ void Navigation::RunAssign1() {
 void Navigation::GenerateCurvatures(int num_samples = 100) {
   //static constexpr float min_curvature = -CAR_CMAX;
   //curvatures_.resize(num_samples);
-  curvatures_.resize(1);
-  //curvatures_[0] = 1;
-  //curvatures_[1] = 0.8;
-  curvatures_[0] = 0.8;
-  //curvatures_[2] = 0.6;
-  //curvatures_[3] = 0.4;
-  //curvatures_[4] = 0.2;
+  curvatures_.resize(5);
+  curvatures_[0] = 1;
+  curvatures_[1] = 0.8;
+  // curvatures_[0] = 0.8;
+  curvatures_[2] = 0.6;
+  curvatures_[3] = 0.4;
+  curvatures_[4] = 0.2;
   //for (int i = 0; i < num_samples; i++) {
   //  curvatures_[i] = min_curvature + i * (CAR_CMAX - min_curvature) / num_samples;
   //}
@@ -422,6 +414,49 @@ float Navigation::ComputeTOC(float free_path_length) {
   return max_speed;
 }
 
+void Navigation::drawCar(bool withMargin=true) {
+  // draw car (black)
+  float car_inner_y = CAR_WIDTH / 2.0;
+  float car_outter_y = -car_inner_y;
+  float car_front_x = (CAR_BASE + CAR_LENGTH) / 2.0;
+  float car_rear_x = -(CAR_LENGTH - CAR_BASE) / 2.0;
+
+  Vector2f car_inner_front_pt = Vector2f(car_front_x,car_inner_y);
+  Vector2f car_outter_front_pt = Vector2f(car_front_x,car_outter_y);
+  Vector2f car_inner_rear_pt = Vector2f(car_rear_x,car_inner_y);
+  Vector2f car_outter_rear_pt = Vector2f(car_rear_x,car_outter_y);
+
+  visualization::DrawLine(car_inner_front_pt,car_outter_front_pt,0, local_viz_msg_);
+  visualization::DrawLine(car_outter_rear_pt,car_outter_front_pt,0, local_viz_msg_);
+  visualization::DrawLine(car_inner_front_pt,car_inner_rear_pt,0, local_viz_msg_);
+  visualization::DrawLine(car_inner_rear_pt,car_outter_rear_pt,0, local_viz_msg_);
+
+  // draw margin (orange)
+  float car_inner_y_m = CAR_WIDTH / 2.0 + SAFETY_MARGIN;
+  float car_outter_y_m = -car_inner_y;
+  float car_front_x_m = (CAR_BASE + CAR_LENGTH) / 2.0 + SAFETY_MARGIN;
+  float car_rear_x_m = -(CAR_LENGTH - CAR_BASE) / 2.0 - SAFETY_MARGIN;
+
+  Vector2f car_inner_front_pt_m = Vector2f(car_front_x_m,car_inner_y_m);
+  Vector2f car_outter_front_pt_m = Vector2f(car_front_x_m,car_outter_y_m);
+  Vector2f car_inner_rear_pt_m = Vector2f(car_rear_x_m,car_inner_y_m);
+  Vector2f car_outter_rear_pt_m = Vector2f(car_rear_x_m,car_outter_y_m);
+
+  visualization::DrawLine(car_inner_front_pt_m,car_outter_front_pt_m,0xFFC116, local_viz_msg_);
+  visualization::DrawLine(car_outter_rear_pt_m,car_outter_front_pt_m,0xFFC116, local_viz_msg_);
+  visualization::DrawLine(car_inner_front_pt_m,car_inner_rear_pt_m,0xFFC116, local_viz_msg_);
+  visualization::DrawLine(car_inner_rear_pt_m,car_outter_rear_pt_m,0xFFC116, local_viz_msg_);
+
+
+}
+
+void Navigation::drawPointCloud() {
+  // olive color
+  for (auto point : point_cloud_) {
+    visualization::DrawCross(point,0.1,0x808000,local_viz_msg_);
+	}
+}
+
 void Navigation::Run() {
   // This function gets called 20 times a second to form the control loop.
   
@@ -437,6 +472,9 @@ void Navigation::Run() {
   
   // The latest observed point cloud is accessible via "point_cloud_"
 
+  // visualization
+  // car + margin
+  drawCar(true);
 
   // Eventually, you will have to set the control values to issue drive commands:
   // drive_msg_.curvature = ...;
