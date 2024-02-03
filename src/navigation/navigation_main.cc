@@ -100,7 +100,8 @@ void LaserCallback(const sensor_msgs::LaserScan& msg) {
 
   // angle for ranges[i]: msg.angle_min + msg.angle_increment * i
   float current_angle = msg.angle_min - msg.angle_increment;
-  for (long unsigned int i = 0 ;i < sizeof(msg.ranges) / sizeof(msg.ranges[0]); ++i )
+  unsigned int N = floor(( msg.angle_max - msg.angle_min) / msg.angle_increment);
+  for (unsigned int i = 0 ;i < N; ++i )
   {
     current_angle += msg.angle_increment;
     if (msg.ranges[i] > msg.range_max || msg.ranges[i] < msg.angle_min) {

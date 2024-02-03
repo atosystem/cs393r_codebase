@@ -34,6 +34,9 @@
 #define CAR_CMAX 1
 #define SAFETY_MARGIN 0.3
 
+// heuristic 
+#define PENALTY_CURVE 0.3
+
 using std::vector;
 
 namespace ros {
