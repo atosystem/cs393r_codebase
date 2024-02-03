@@ -202,15 +202,15 @@ float Navigation::ComputeFreePathLength(float curvature) {
   float car_inner_y = CAR_WIDTH / 2.0 + SAFETY_MARGIN;
   float car_outter_y = -car_inner_y;
   float car_front_x = (CAR_BASE + CAR_LENGTH) / 2.0 + SAFETY_MARGIN;
-  float car_rear_x = -(CAR_LENGTH - CAR_BASE) / 2.0 - SAFETY_MARGIN;
+  //float car_rear_x = -(CAR_LENGTH - CAR_BASE) / 2.0 - SAFETY_MARGIN;
   
   const float r = 1.0 / curvature;
 
   const Vector2f center_pt = Vector2f(0,r);  // turning instant center
   const Vector2f car_inner_front_pt = Vector2f(car_front_x,car_inner_y);
   const Vector2f car_outter_front_pt = Vector2f(car_front_x,car_outter_y);
-  const Vector2f car_inner_rear_pt = Vector2f(car_rear_x,car_inner_y);
-  const Vector2f car_outter_rear_pt = Vector2f(car_rear_x,car_outter_y);
+  //const Vector2f car_inner_rear_pt = Vector2f(car_rear_x,car_inner_y);
+  //const Vector2f car_outter_rear_pt = Vector2f(car_rear_x,car_outter_y);
 
 
   const float r_min = r - (CAR_WIDTH / 2.0 + SAFETY_MARGIN);
@@ -433,7 +433,7 @@ void Navigation::drawCar(bool withMargin=true) {
 
   // draw margin (orange)
   float car_inner_y_m = CAR_WIDTH / 2.0 + SAFETY_MARGIN;
-  float car_outter_y_m = -car_inner_y;
+  float car_outter_y_m = -car_inner_y_m;
   float car_front_x_m = (CAR_BASE + CAR_LENGTH) / 2.0 + SAFETY_MARGIN;
   float car_rear_x_m = -(CAR_LENGTH - CAR_BASE) / 2.0 - SAFETY_MARGIN;
 
