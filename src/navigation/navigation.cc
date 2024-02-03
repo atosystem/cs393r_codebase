@@ -113,21 +113,19 @@ void Navigation::ObservePointCloud(const vector<Vector2f>& cloud,
   point_cloud_ = cloud;                                     
 }
 
-<<<<<<< HEAD
-float ComputeEuclideanDistance(const Vector2f& p1, const Vector2f& p2) {
-    float dx = p1.x() - p2.x();
-    float dy = p1.y() - p2.y();
-
-    return std::sqrt(dx * dx + dy * dy);
-}
 
 float ComputeClearance(float free_path_len, float curv) {
-  float min_clearance = FLOAT_MAX;
+  float min_clearance = 1000.0;
   // float c_max = ??
-  float turning_radius = 1 / curv;
-  Vector2f turning_center(0, turning_radius);
-  float min_r = std::sqrt(pow(turning_radius + CAR_WIDTH / 2, 2))
-  float max_r = std::sqrt(pow(turning_radius + CAR_WIDTH / 2, 2) + pow((CAR_LENGTH + WHEEL_BASE) / 2, 2));
+  float r = 1.0 / curv;
+  float car_outter_y = -car_inner_y;
+  float car_front_x = (CAR_BASE + CAR_LENGTH) / 2.0 + SAFETY_MARGIN;
+  
+  const Vector2f center_pt = Vector2f(0,r);  // turning instant center
+  const Vector2f car_outter_front_pt = Vector2f(car_front_x,car_outter_y);
+  
+  const float r_min = r - (CAR_WIDTH / 2.0 + SAFETY_MARGIN);
+  const float r_max = (center_pt - car_outter_front_pt ).norm();
 
   if (curv == 0) {    // straight line
     for (auto point : point_cloud_) {
@@ -139,10 +137,11 @@ float ComputeClearance(float free_path_len, float curv) {
     for (auto point : point_cloud_) {
       // TODO: if the point will affect the clearance
       float cur_clearance;
-      if (ComputeEuclideanDistance(turning_center, point) > turning_radius) {
-        cur_clearance = ComputeEuclideanDistance(turning_center, point) - max_r;
+      float center_to_point_dist = (center_pt - point).norm();
+      if (center_to_point_dist > r) { // |c-p| > r
+        cur_clearance = center_to_point_dist - r_max; // |c-p| - rmax
       } else {
-        cur_clearance = min_r - ComputeEuclideanDistance(turning_center, point);
+        cur_clearance = r_min - center_to_point_dist;
       }
       min_clearance = min(min_clearance,cur_clearance);
     }
@@ -150,117 +149,186 @@ float ComputeClearance(float free_path_len, float curv) {
 
   return min_clearance;
 }
-Path Navigation::ChoosePath() {
-=======
-PathOption Navigation::ChoosePath(const vector<float> &curvatures) {
->>>>>>> yjshih_assign1
+PathOption Navigation::ChoosePath(vector<PathOption> candidate_paths) {
  
-  vector<PathOption> candidate_paths;
-  PathOption return_path;
+  // PathOption return_path;
 
-  float best_option = -100;
-  int best_option_id = 0;
-  int _id = 0;
+  float highest_score = -1;
+  PathOption best_path;
+  float score_w = 0.5; // hyper-param
 
-  for (auto _curv : curvatures)
-  {
+  for (auto path : candidate_paths) {
+    float _curv = path.curvature;
     float free_path_len = ComputeFreePathLength(_curv);
-    // float clearance = ComputeClearance(free_path_len, _curv);
-    // float score = free_path_len + w1 * clearance;
-    if (free_path_len > best_option) {
-      best_option_id = _id;
+    float clearance = ComputeClearance(free_path_len, _curv);
+    float score = free_path_len + score_w * clearance;
+    if (score > highest_score) {
+      highest_score = score;
+      best_path.curvature = _curv;
+      best_path.clearance = clearance;
+      best_path.free_path_len = free_path_len;
     }
-    ++_id;
   }
 
   // just for an example
-  return_path.curvature = curvatures[best_option_id];
-  return_path.clearance = 1.4;
-  return_path.free_path_length = best_option;
-  return_path.obstruction = Vector2f(0,0)
-  return_path.closest_point = Vector2f(0,0);
+  // return_path.curvature = best_curv;
+  // return_path.clearance = 1.4;
+  // return_path.free_path_length = best_option;
+  // return_path.obstruction = Vector2f(0,0)
+  // return_path.closest_point = Vector2f(0,0);
 
-  return return_path;
+  return best_path;
     
 }
 
 float Navigation::ComputeFreePathLength(float curvature) {
-
-  // assume all points have free path length og +inf first
-  float free_path_lengths[point_cloud_.size()] = { std::numeric_limits<float>::infinity() };
-
-  float car_inner_y = this->car_w / 2.0 + m;
-  float car_outter_y = -car_inner_y;
-  float car_front_x = (this->car_b + this->car_l) / 2.0 + m;
-  float car_rear_x = -(this->car_l - this->car_b) / 2.0 - m;
+  """notation
+  Angle
+    theta: turing angle
+  Radius
+    r: turning radius
   
-  const float r = 1.0 / curvature
+  inner_rear        inner_front(r1)
+    *----------------*
+    |                |
+    |  *(0,0)        |>>
+    |                |
+    *----------------*
+   outer_rear(r2)    outer_front(rmax)
+  """
+  // Car points (baselink frame)
+  float car_inner_y = CAR_WIDTH / 2.0 + SAFETY_MARGIN
+  float car_outter_y = -car_inner_y;
+  float car_front_x = (CAR_BASE + CAR_LENGTH) / 2.0 + SAFETY_MARGIN;
+  float car_rear_x = -(CAR_LENGTH - CAR_BASE) / 2.0 - SAFETY_MARGIN;
+  
+  const float r = 1.0 / curvature;
 
-  const Vector2f center_pt = Vector2f(0,r);
+  const Vector2f center_pt = Vector2f(0,r);  // turning instant center
   const Vector2f car_inner_front_pt = Vector2f(car_front_x,car_inner_y);
   const Vector2f car_outter_front_pt = Vector2f(car_front_x,car_outter_y);
   const Vector2f car_inner_rear_pt = Vector2f(car_rear_x,car_inner_y);
   const Vector2f car_outter_rear_pt = Vector2f(car_rear_x,car_outter_y);
 
 
-  const float r_min = r - (this->car_w / 2.0 + m);
+  const float r_min = r - (CAR_WIDTH / 2.0 + SAFETY_MARGIN);
   const float r_max = (center_pt - car_outter_front_pt ).norm();
-  const float r1 = (center_pt - car_inner_front_pt ).norm();
-  const float r2 = (center_pt - car_outter_rear_pt ).norm();
+  const float r_1 = (center_pt - car_inner_front_pt ).norm();
+  const float r_2 = (center_pt - car_outter_rear_pt ).norm();
 
-  // for (auto _pt : point_cloud_)
-  for (unsigned int i=0; i< point_cloud_.size(); ++i)
-  {
-    float r_p = (center_pt - point_cloud_[i] ).norm();
+  float free_path_length = 1000.0;
+  for (auto point : point_cloud_) {
     
-    // the coressponding point on car
-    Vector2f p_car;
+    // whether the car will hit the point
     bool collision = true;
-    // determine cases
-    if (
-      point_cloud_[i].x() >=0 &&
-      point_cloud_[i].y() >= car_inner_y &&
-      r_p >= r_min &&
-      r_p <=r1
-    ) {
-      // case1 : first hit inner side
-      p_car.x() = sqrt( r_p^2 - r_min^2);
-      p_car.y() = car_inner_y;
-    }else if (
-      point_cloud_[i].x() >=0 &&
-      point_cloud_[i].y() >= car_outter_y &&
-      r_p >= r_1 &&
-      r_p <= r_max
-    ) {
-      // case2 : first hit front side
-      p_car.x() = car_front_x;
-      p_car.y() = r - sqrt(r_p^2 - car_front_x^2);
-    } else if (
-      point_cloud_[i].x() >= car_rear_x &&
-      point_cloud_[i].y() <= car_outter_y &&
-      r_p >= r + car_inner_y &&
-      r_p <= r_2
-    ){
-      // case3 : first hit outter side
-      p_car.x() = -sqrt( r_p^2 - (r + car_inner_y)^2 );
-      p_car.y() = car_outter_y;
     
+    // r_p point to center
+    float r_p = (center_pt - point).norm();
+
+    // angle: point angle, init base_link -> point
+    float theta = atan2(point.x() / (r - point.y())); // atan2(x / (r-y))
+    // angle: new base_link -> point
+    float omega; 
+
+    if (theta > 0 && r_p >= r_1 && r_p <= r_max) { 
+      // front side
+      omega = asin2(car_front_x / r_p); // asin(h/rp)
+    } else if (theta > 0 && r_p >= r_min && r_p <= r_1) {
+      // inner side
+      omega = acos2((r - (CAR_WIDTH / 2 + SAFETY_MARGIN)) / r_p); // acos(r-w/2 / rp)
     } else {
-      // won't collide
+      // case 3, or no collision
       collision = false;
     }
 
     if (collision) {
-      float theta = asin( (p_car - point_cloud_[i]).norm() / 2.0 / r_p  );
-      _free_path_length = r * sin( 2 * theta  );
-      free_path_lengths.push_back(_free_path_length);
-    }
-    
-  }
+      //  turning angle: init base_link -> new base_link = theta - omega
+      float cur_free_path_length = (theta - omega) * r; // turning_angle * r
+      free_path_length = min(free_path_length, cur_free_path_length);
+    } 
 
-  return *std::min_element(free_path_lengths, free_path_lengths + point_cloud_.size());
-  
+  }
+  return free_path_length;
+
+
 }
+// float Navigation::ComputeFreePathLength(float curvature) {
+
+//   // assume all points have free path length og +inf first
+//   float free_path_lengths[point_cloud_.size()] = { std::numeric_limits<float>::infinity() };
+
+//   float car_inner_y = this->car_w / 2.0 + m;
+//   float car_outter_y = -car_inner_y;
+//   float car_front_x = (this->car_b + this->car_l) / 2.0 + m;
+//   float car_rear_x = -(this->car_l - this->car_b) / 2.0 - m;
+  
+//   const float r = 1.0 / curvature
+
+//   const Vector2f center_pt = Vector2f(0,r);
+//   const Vector2f car_inner_front_pt = Vector2f(car_front_x,car_inner_y);
+//   const Vector2f car_outter_front_pt = Vector2f(car_front_x,car_outter_y);
+//   const Vector2f car_inner_rear_pt = Vector2f(car_rear_x,car_inner_y);
+//   const Vector2f car_outter_rear_pt = Vector2f(car_rear_x,car_outter_y);
+
+
+//   const float r_min = r - (this->car_w / 2.0 + m);
+//   const float r_max = (center_pt - car_outter_front_pt ).norm();
+//   const float r1 = (center_pt - car_inner_front_pt ).norm();
+//   const float r2 = (center_pt - car_outter_rear_pt ).norm();
+
+//   // for (auto _pt : point_cloud_)
+//   for (unsigned int i=0; i< point_cloud_.size(); ++i)
+//   {
+//     float r_p = (center_pt - point_cloud_[i] ).norm();
+    
+//     // the coressponding point on car
+//     Vector2f p_car;
+//     bool collision = true;
+//     // determine cases
+//     if (
+//       point_cloud_[i].x() >=0 &&
+//       point_cloud_[i].y() >= car_inner_y &&
+//       r_p >= r_min &&
+//       r_p <=r1
+//     ) {
+//       // case1 : first hit inner side
+//       p_car.x() = sqrt( r_p^2 - r_min^2);
+//       p_car.y() = car_inner_y;
+//     }else if (
+//       point_cloud_[i].x() >=0 &&
+//       point_cloud_[i].y() >= car_outter_y &&
+//       r_p >= r_1 &&
+//       r_p <= r_max
+//     ) {
+//       // case2 : first hit front side
+//       p_car.x() = car_front_x;
+//       p_car.y() = r - sqrt(r_p^2 - car_front_x^2);
+//     } else if (
+//       point_cloud_[i].x() >= car_rear_x &&
+//       point_cloud_[i].y() <= car_outter_y &&
+//       r_p >= r + car_inner_y &&
+//       r_p <= r_2
+//     ){
+//       // case3 : first hit outter side
+//       p_car.x() = -sqrt( r_p^2 - (r + car_inner_y)^2 );
+//       p_car.y() = car_outter_y;
+    
+//     } else {
+//       // won't collide
+//       collision = false;
+//     }
+
+//     if (collision) {
+//       float theta = asin( (p_car - point_cloud_[i]).norm() / 2.0 / r_p  );
+//       _free_path_length = r * sin( 2 * theta  );
+//       free_path_lengths.push_back(_free_path_length);
+//     }
+    
+//   }
+
+//   return *std::min_element(free_path_lengths, free_path_lengths + point_cloud_.size());
+  
+// }
 
 
 void Navigation::RunAssign1() {

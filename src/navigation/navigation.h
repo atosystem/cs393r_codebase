@@ -34,6 +34,13 @@ namespace ros {
 
 namespace navigation {
 
+// car params
+const float CAR_LENGTH = 0.535;
+const float CAR_WIDTH = 0.281;
+const float CAR_BASE = 0.324;
+const float CAR_CMAX = 1;
+const float SAFETY_MARGIN = 0.3;
+
 struct PathOption {
   float curvature;
   float clearance;
@@ -73,12 +80,7 @@ class Navigation {
 
   float ComputeFreePathLength(float curvature);
  
-  // car params
-  const float car_l = 0.535;
-  const float car_w = 0.281;
-  const float car_b = 0.324;
-  const float car_c_max = 1;
-  const float car_margin = 0.3;
+  
 
 
  private:
