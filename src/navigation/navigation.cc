@@ -159,7 +159,9 @@ PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs) {
   float score_w = 0; // hyper-param
 
   for (auto _curv : candidate_curvs) {
-    
+    // draw options (gray)
+    visualization::DrawPathOption(_curv,1,5,0x808080,false,local_viz_msg_);
+
     float free_path_len = ComputeFreePathLength(_curv);
     float clearance = ComputeClearance(free_path_len, _curv);
     // float score = free_path_len + score_w * clearance - PENALTY_CURVE * std::abs(_curv);
@@ -204,7 +206,7 @@ float Navigation::ComputeFreePathLength(float curvature) {
   float car_front_x = (CAR_BASE + CAR_LENGTH) / 2.0 + SAFETY_MARGIN;
   //float car_rear_x = -(CAR_LENGTH - CAR_BASE) / 2.0 - SAFETY_MARGIN;
   
-  const float r = 1.0 / curvature;
+  
 
   const Vector2f center_pt = Vector2f(0,r);  // turning instant center
   const Vector2f car_inner_front_pt = Vector2f(car_front_x,car_inner_y);
@@ -213,12 +215,77 @@ float Navigation::ComputeFreePathLength(float curvature) {
   //const Vector2f car_outter_rear_pt = Vector2f(car_rear_x,car_outter_y);
 
 
-  const float r_min = r - (CAR_WIDTH / 2.0 + SAFETY_MARGIN);
-  const float r_max = (center_pt - car_outter_front_pt ).norm();
-  const float r_1 = (center_pt - car_inner_front_pt ).norm();
-  // const float r_2 = (center_pt - car_outter_rear_pt ).norm();
-
   float free_path_length = 1000.0;
+
+  if (curvature==0) {
+    // go straight
+    for (auto point : point_cloud_) {
+      if (point.y() <= car_inner_y && point.y() >= car_outter_y && point.x() >= car_front_x) {
+        free_path_length = std::min(free_path_length, point.x() - car_front_x )
+      }
+
+  } else {
+    // go curve
+    const float r = 1.0 / curvature;
+    const float r_min = r - (CAR_WIDTH / 2.0 + SAFETY_MARGIN);
+    const float r_max = (center_pt - car_outter_front_pt ).norm();
+    const float r_1 = (center_pt - car_inner_front_pt ).norm();
+    // const float r_2 = (center_pt - car_outter_rear_pt ).norm();
+
+
+    for (auto point : point_cloud_) {
+      //visualization::DrawCross(point,0.2,2,local_viz_msg_); 
+      // whether the car will hit the point
+      bool collision = true;
+      
+      // r_p point to center
+      float r_p = (center_pt - point).norm();
+
+      // angle: point angle, init base_link -> point
+      float theta = atan2(point.x() ,  (r - point.y())); // atan2(x / (r-y))
+      // angle: new base_link -> point
+      float omega; 
+
+      if (theta > 0 && r_p >= r_1 && r_p <= r_max) { 
+        // front side
+        omega = asin(car_front_x / r_p); // asin(h/rp)
+      } else if (theta > 0 && r_p >= r_min && r_p <= r_1) {
+        // inner side
+        omega = acos((r - (CAR_WIDTH / 2 + SAFETY_MARGIN)) / r_p); // acos(r-w/2 / rp)
+      } else {
+        // case 3, or no collision
+        collision = false;
+      }
+
+      if (collision) {
+        //  turning angle: init base_link -> new base_link = theta - omega
+    //    std::cout<<"Collide theta="<<theta<<" omega="<<omega<<"\n";
+
+        float cur_free_path_length = (theta - omega) * r; // turning_angle * r
+
+        //std::cout<<"cur_free_path_length="<<cur_free_path_length<<" free_path_length="<<free_path_length<<"\n";
+        free_path_length = std::min(free_path_length, cur_free_path_length);
+        /*
+        if (cur_free_path_length < free_path_length) {
+
+        std::cout<<"collision!\n";
+          free_path_length = cur_free_path_length;
+          best_angle = (theta - omega);
+          best_r = r_p;
+          best_pt.x() = point.x();
+          best_pt.y() = point.y();
+        }
+        */
+      } 
+
+    }
+    
+
+  }
+
+  
+
+  
   //float best_angle = 0;
   //Vector2f best_pt(0,0);
   //float best_r = 0;
@@ -232,53 +299,8 @@ visualization::DrawArc(
                  local_viz_msg_
                  );
 		 */
-  visualization::DrawPathOption(curvature,1,5,0x808080,false,local_viz_msg_);
-  for (auto point : point_cloud_) {
-    //visualization::DrawCross(point,0.2,2,local_viz_msg_); 
-    // whether the car will hit the point
-    bool collision = true;
-    
-    // r_p point to center
-    float r_p = (center_pt - point).norm();
 
-    // angle: point angle, init base_link -> point
-    float theta = atan2(point.x() ,  (r - point.y())); // atan2(x / (r-y))
-    // angle: new base_link -> point
-    float omega; 
-
-    if (theta > 0 && r_p >= r_1 && r_p <= r_max) { 
-      // front side
-      omega = asin(car_front_x / r_p); // asin(h/rp)
-    } else if (theta > 0 && r_p >= r_min && r_p <= r_1) {
-      // inner side
-      omega = acos((r - (CAR_WIDTH / 2 + SAFETY_MARGIN)) / r_p); // acos(r-w/2 / rp)
-    } else {
-      // case 3, or no collision
-      collision = false;
-    }
-
-    if (collision) {
-      //  turning angle: init base_link -> new base_link = theta - omega
-	//    std::cout<<"Collide theta="<<theta<<" omega="<<omega<<"\n";
-
-      float cur_free_path_length = (theta - omega) * r; // turning_angle * r
-
-      //std::cout<<"cur_free_path_length="<<cur_free_path_length<<" free_path_length="<<free_path_length<<"\n";
-      free_path_length = std::min(free_path_length, cur_free_path_length);
-      /*
-      if (cur_free_path_length < free_path_length) {
-
-	    std::cout<<"collision!\n";
-	      free_path_length = cur_free_path_length;
-	      best_angle = (theta - omega);
-	      best_r = r_p;
-	      best_pt.x() = point.x();
-	      best_pt.y() = point.y();
-      }
-      */
-    } 
-
-  }
+  
   /*
   if (best_angle != 0) {
           //std::cout<<"asd\n";
@@ -295,8 +317,8 @@ visualization::DrawArc(
 		 ); 
   }
 */
-
-	  visualization::DrawPathOption(curvature,free_path_length,5,0x00FFFF,false,local_viz_msg_);
+  // draw free path length along the curve (cyan)
+  visualization::DrawPathOption(curvature,free_path_length,5,0x00FFFF,false,local_viz_msg_);
   return free_path_length;
 
 
@@ -403,7 +425,7 @@ void Navigation::RunAssign1() {
 }
 void Navigation::GenerateCurvatures(int num_samples = 100) {
   static constexpr float min_curvature = -CAR_CMAX;
-  curvatures_.resize(num_samples);
+  
  /* 
   curvatures_.resize(5);
   curvatures_[0] = 1;
@@ -414,8 +436,18 @@ void Navigation::GenerateCurvatures(int num_samples = 100) {
   */
 //	curvatures_.resize(5);
 //	curvatures_[0] = 0.8;
-  for (int i = 0; i < num_samples; i++) {
-    curvatures_[i] = min_curvature + i * (CAR_CMAX - min_curvature) / num_samples;
+  if (num_samples % 2 == 0) {
+    num_samples += 1;
+  }
+  curvatures_.resize(num_samples);
+  // half of samples
+  num_samples = (num_samples - 1) / 2;
+  float _delta = CAR_CMAX / num_samples;
+  // straight line
+  curvatures_[0] = 0;
+  for (int i = 0; i < num_samples; ++i) {
+    curvatures_[i*2+1] = _delta*(i+1);
+    curvatures_[i*2+2] = -curvatures_[i*2+1];
   }
   return;
 }
