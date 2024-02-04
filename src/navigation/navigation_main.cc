@@ -103,7 +103,7 @@ void LaserCallback(const sensor_msgs::LaserScan& msg) {
   for (unsigned int i = 0 ;i < N; ++i )
   {
     current_angle += msg.angle_increment;
-    if (msg.ranges[i] > msg.range_max || msg.ranges[i] < msg.angle_min) {
+    if (msg.ranges[i] >= msg.range_max || msg.ranges[i] <= msg.range_min) {
       // out of range -> should discard
       continue;
     }

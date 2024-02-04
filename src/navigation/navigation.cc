@@ -476,11 +476,11 @@ float Navigation::ComputeTOC(float free_path_length) {
   float min_dist = velocity * velocity / (2 * max_acceleration);
 
   if (free_path_length <= min_dist) {
-    return velocity - dt * max_acceleration;
+    return std::max(velocity - dt * max_acceleration, 0.f);
   }
 
   if (velocity < max_speed) {
-    return velocity + dt * max_acceleration;
+    return std::min(velocity + dt * max_acceleration, max_speed);
   }
 
   return max_speed;
@@ -525,7 +525,8 @@ void Navigation::drawCar(bool withMargin=true) {
 void Navigation::drawPointCloud() {
   // olive color
   for (auto point : point_cloud_) {
-    visualization::DrawCross(point,0.1,0x808000,local_viz_msg_);
+    // visualization::DrawCross(point,0.01,0x808000,local_viz_msg_);
+    visualization::DrawPoint(point,0x808000,local_viz_msg_);
 	}
 }
 
