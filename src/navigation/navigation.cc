@@ -436,6 +436,7 @@ void Navigation::RunAssign1() {
   // 4. Implement 1-D TOC on the chosen arc.
   float velocity = ComputeTOC(chosen_path.free_path_length); // calculate velocity
 
+  std::cout << "Curvature: " << chosen_path.curvature << "; velocity: " << velocity << "\n";
   drive_msg_.curvature = chosen_path.curvature;
   drive_msg_.velocity = velocity;
 }
