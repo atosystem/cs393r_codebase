@@ -264,12 +264,12 @@ float Navigation::ComputeFreePathLength(float curvature) {
       // angle: new base_link -> point
       float omega; 
 
-      if (theta > 0 && r_p >= r_1 && r_p <= r_max) { 
+      if (theta > 0 && r_p >= r_1 && r_p <= r_max && point.x() > 0) { 
         // front side
         omega = asin(car_front_x / r_p); // asin(h/rp)
-      } else if (theta > 0 && r_p >= r_min && r_p <= r_1) {
+      } else if (theta > 0 && r_p >= r_min && r_p <= r_1 && point.x() > 0) {
         // inner side
-        omega = acos((r - (CAR_WIDTH / 2 + SAFETY_MARGIN)) / r_p); // acos(r-w/2 / rp)
+        omega = acos((r - (CAR_WIDTH / 2.0 + SAFETY_MARGIN)) / r_p); // acos(r-w/2 / rp)
       } else {
         // case 3, or no collision
         collision = false;
