@@ -236,7 +236,7 @@ float Navigation::ComputeFreePathLength(float curvature) {
     }
   } else {
     // go curve
-    const float r = 1.0 / curvature;
+    const float r = 1.0 / std::abs(curvature);
     const Vector2f center_pt = Vector2f(0,r);  // turning instant center
     const Vector2f car_inner_front_pt = Vector2f(car_front_x,car_inner_y);
     const Vector2f car_outter_front_pt = Vector2f(car_front_x,car_outter_y);
@@ -252,6 +252,9 @@ float Navigation::ComputeFreePathLength(float curvature) {
 
 
     for (auto point : point_cloud_) {
+      if (curvature < 0)
+        point.y() = -point.y();
+        
       //visualization::DrawCross(point,0.2,2,local_viz_msg_); 
       // whether the car will hit the point
       bool collision = true;
