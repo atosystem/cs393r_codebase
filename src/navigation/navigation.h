@@ -145,7 +145,8 @@ class Navigation {
   static constexpr float dt = 0.05f;
   static constexpr float max_speed = 1.f;
   static constexpr float max_curvature = 1.f / 0.98f;
-  static constexpr float max_acceleration = .1f;
+  static constexpr float max_acceleration = 4.f;
+ 
 };
 
 }  // namespace navigation
