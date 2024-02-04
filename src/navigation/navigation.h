@@ -32,7 +32,7 @@
 #define CAR_WIDTH 0.281
 #define CAR_BASE 0.324
 #define CAR_CMAX 1
-#define SAFETY_MARGIN 0.3
+#define SAFETY_MARGIN 0.03
 
 // heuristic 
 #define PENALTY_CURVE  2
@@ -143,7 +143,7 @@ class Navigation {
 
   // Configuration
   static constexpr float dt = 0.05f;
-  static constexpr float max_speed = 1.f;
+  static constexpr float max_speed = 1.0f;
   static constexpr float max_curvature = 1.f / 0.98f;
   static constexpr float max_acceleration = 4.f;
  

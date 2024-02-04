@@ -154,7 +154,7 @@ float Navigation::ComputeClearance(float free_path_len, float curv) {
       cur_clearance = std::abs(center_to_point_dist - r); // |c-p| - rmax
       // cout << "curv, x, clearance: " << curv << ", " << point.x() << ", " << cur_clearance << endl;
       if (cur_clearance < min_clearance) {
-          cout << "min_clearance, x, center_to_point_dist: " << min_clearance << ", " << point.x() << ", " << center_to_point_dist << endl;
+          // cout << "min_clearance, x, center_to_point_dist: " << min_clearance << ", " << point.x() << ", " << center_to_point_dist << endl;
       }
       min_clearance = std::min(min_clearance,cur_clearance);
     }
@@ -169,7 +169,7 @@ PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs) {
   float highest_score = -1;
   PathOption best_path;
   float score_clearance = 0; // hyper-param
-  float score_curv = -2;
+  float score_curv = 0;
   for (auto _curv : candidate_curvs) {
     // draw options (gray)
     // visualization::DrawPathOption(_curv,1,5,0x808080,false,local_viz_msg_);
@@ -188,7 +188,9 @@ PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs) {
   }
   // visualize the selected path (red)
   //std::cout<<"Score "<<highest_score<<"\n";
-  // visualization::DrawPathOption(best_path.curvature,best_path.free_path_length,best_path.clearance,0xFF0000,false,local_viz_msg_);
+  // draw best option (blue)
+  visualization::DrawPathOption(best_path.curvature,best_path.free_path_length,best_path.clearance,0x0F03FC,false,local_viz_msg_);
+  std::cout<<"Best C="<<best_path.curvature<<" Free Path Length="<<best_path.free_path_length<<"\n";
   // just for an example
   // return_path.curvature = best_curv;
   // return_path.clearance = 1.4;
@@ -439,7 +441,7 @@ void Navigation::RunAssign1() {
   // 4. Implement 1-D TOC on the chosen arc.
   float velocity = ComputeTOC(chosen_path.free_path_length); // calculate velocity
 
-  std::cout << "Curvature: " << chosen_path.curvature << "; velocity: " << velocity << "\n";
+  // std::cout << "Curvature: " << chosen_path.curvature << "; velocity: " << velocity << "\n";
   drive_msg_.curvature = chosen_path.curvature;
   drive_msg_.velocity = velocity;
 }
