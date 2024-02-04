@@ -186,11 +186,12 @@ PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs) {
       best_path.free_path_length = free_path_len;
     }
   }
-  // visualize the selected path (red)
+
   //std::cout<<"Score "<<highest_score<<"\n";
   // draw best option (blue)
   visualization::DrawPathOption(best_path.curvature,best_path.free_path_length,best_path.clearance,0x0F03FC,false,local_viz_msg_);
   std::cout<<"Best C="<<best_path.curvature<<" Free Path Length="<<best_path.free_path_length<<"\n";
+  
   // just for an example
   // return_path.curvature = best_curv;
   // return_path.clearance = 1.4;
@@ -282,146 +283,20 @@ float Navigation::ComputeFreePathLength(float curvature) {
 
       if (collision) {
         //  turning angle: init base_link -> new base_link = theta - omega
-    //    std::cout<<"Collide theta="<<theta<<" omega="<<omega<<"\n";
-
         float cur_free_path_length = (theta - omega) * r; // turning_angle * r
 
         //std::cout<<"cur_free_path_length="<<cur_free_path_length<<" free_path_length="<<free_path_length<<"\n";
         free_path_length = std::min(free_path_length, cur_free_path_length);
-        /*
-        if (cur_free_path_length < free_path_length) {
-
-        std::cout<<"collision!\n";
-          free_path_length = cur_free_path_length;
-          best_angle = (theta - omega);
-          best_r = r_p;
-          best_pt.x() = point.x();
-          best_pt.y() = point.y();
-        }
-        */
       } 
-
     }
     
-
   }
 
-  
-
-  
-  //float best_angle = 0;
-  //Vector2f best_pt(0,0);
-  //float best_r = 0;
-  /*
-visualization::DrawArc(
-                    center_pt,
-                    r,
-                    1.5 * 3.14,
-                    0,
-                  0x808080,
-                 local_viz_msg_
-                 );
-		 */
-
-  
-  /*
-  if (best_angle != 0) {
-	  std::cout<<"asd\n";
-	  std::cout<<atan2(best_pt.x(),best_pt.y())<<"\n";
-	  std::cout<<"angle , r"<<best_angle<<best_r<<"\n";
-    // visualization::DrawArc(
-		//     center_pt,
-		//     best_r,
-		//     atan2(best_pt.x(),best_pt.y()-r) - best_angle,
-		//    atan2(best_pt.x(), best_pt.y() - r),
-		//   0xFF0000,
-		//  local_viz_msg_
-		//  ); 
-  }
-*/
   // draw free path length along the curve (cyan)
   // visualization::DrawPathOption(curvature,free_path_length,5,0x00FFFF,false,local_viz_msg_);
   return free_path_length;
 
-
 }
-// float Navigation::ComputeFreePathLength(float curvature) {
-
-//   // assume all points have free path length og +inf first
-//   float free_path_lengths[point_cloud_.size()] = { std::numeric_limits<float>::infinity() };
-
-//   float car_inner_y = this->car_w / 2.0 + m;
-//   float car_outter_y = -car_inner_y;
-//   float car_front_x = (this->car_b + this->car_l) / 2.0 + m;
-//   float car_rear_x = -(this->car_l - this->car_b) / 2.0 - m;
-  
-//   const float r = 1.0 / curvature
-
-//   const Vector2f center_pt = Vector2f(0,r);
-//   const Vector2f car_inner_front_pt = Vector2f(car_front_x,car_inner_y);
-//   const Vector2f car_outter_front_pt = Vector2f(car_front_x,car_outter_y);
-//   const Vector2f car_inner_rear_pt = Vector2f(car_rear_x,car_inner_y);
-//   const Vector2f car_outter_rear_pt = Vector2f(car_rear_x,car_outter_y);
-
-
-//   const float r_min = r - (this->car_w / 2.0 + m);
-//   const float r_max = (center_pt - car_outter_front_pt ).norm();
-//   const float r1 = (center_pt - car_inner_front_pt ).norm();
-//   const float r2 = (center_pt - car_outter_rear_pt ).norm();
-
-//   // for (auto _pt : point_cloud_)
-//   for (unsigned int i=0; i< point_cloud_.size(); ++i)
-//   {
-//     float r_p = (center_pt - point_cloud_[i] ).norm();
-    
-//     // the coressponding point on car
-//     Vector2f p_car;
-//     bool collision = true;
-//     // determine cases
-//     if (
-//       point_cloud_[i].x() >=0 &&
-//       point_cloud_[i].y() >= car_inner_y &&
-//       r_p >= r_min &&
-//       r_p <=r1
-//     ) {
-//       // case1 : first hit inner side
-//       p_car.x() = sqrt( r_p^2 - r_min^2);
-//       p_car.y() = car_inner_y;
-//     }else if (
-//       point_cloud_[i].x() >=0 &&
-//       point_cloud_[i].y() >= car_outter_y &&
-//       r_p >= r_1 &&
-//       r_p <= r_max
-//     ) {
-//       // case2 : first hit front side
-//       p_car.x() = car_front_x;
-//       p_car.y() = r - sqrt(r_p^2 - car_front_x^2);
-//     } else if (
-//       point_cloud_[i].x() >= car_rear_x &&
-//       point_cloud_[i].y() <= car_outter_y &&
-//       r_p >= r + car_inner_y &&
-//       r_p <= r_2
-//     ){
-//       // case3 : first hit outter side
-//       p_car.x() = -sqrt( r_p^2 - (r + car_inner_y)^2 );
-//       p_car.y() = car_outter_y;
-    
-//     } else {
-//       // won't collide
-//       collision = false;
-//     }
-
-//     if (collision) {
-//       float theta = asin( (p_car - point_cloud_[i]).norm() / 2.0 / r_p  );
-//       _free_path_length = r * sin( 2 * theta  );
-//       free_path_lengths.push_back(_free_path_length);
-//     }
-    
-//   }
-
-//   return *std::min_element(free_path_lengths, free_path_lengths + point_cloud_.size());
-  
-// }
 
 
 void Navigation::RunAssign1() {
@@ -446,18 +321,6 @@ void Navigation::RunAssign1() {
   drive_msg_.velocity = velocity;
 }
 void Navigation::GenerateCurvatures(int num_samples = 100) {
- //static constexpr float min_curvature = -CAR_CMAX;
-  
- /* 
-  curvatures_.resize(5);
-  curvatures_[0] = 1;
-  curvatures_[1] = 0.8;
-  curvatures_[2] = 0.6;
-  curvatures_[3] = 0.4;
-  curvatures_[4] = 0.2;
-  */
-//	curvatures_.resize(5);
-//	curvatures_[0] = 0.8;
   if (num_samples % 2 == 0) {
     num_samples += 1;
   }
