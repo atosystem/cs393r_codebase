@@ -430,11 +430,65 @@ void Navigation::RunSineWave(float T) {
   std::cout<<drive_msg_.velocity<<","<<robot_vel_.norm()<<"\n";
 }
 
+
+void Navigation::LatencyCompensation() {
+    // Take the control from latency ago (the control that actually happens now)
+    if (control_queue.empty()) {
+        // No controls in the queue, nothing to compensate
+        return;
+    }
+    Control last_control = control_queue.front(); // Get the oldest control
+    control_queue.pop(); // Remove the oldest control
+
+    // Calculate displacement on x and y axis
+    float x_diff = 0.0;
+    float y_diff = 0.0;
+
+    // Calculate the rotation of the base_link frame
+    float theta_diff = 0.0; // Total angular displacement
+
+    // Start forward-predict (accumulate displacement)
+    for (auto& control : control_queue) {
+        // Loop through each control in the queue
+        float curvature = control.curvature;
+        float velocity = control.velocity;
+
+        // Calculate the x, y displacement
+        float delta_x = velocity * std::cos(curvature) * latency_period;
+        float delta_y = velocity * std::sin(curvature) * latency_period;
+
+        // Accumulate the displacements
+        x_diff += delta_x;
+        y_diff += delta_y;
+
+        // Calculate the angular displacement caused by this control input
+        float delta_theta = velocity * curvature * latency_period;
+
+        // Accumulate the angular displacement
+        theta_diff += delta_theta;
+    }
+
+    // Create translation matrix for x and y displacements
+    Eigen::Translation2f translation(x_diff, y_diff);
+
+    // Create rotation matrix for theta displacement
+    Eigen::Rotation2Df rotation(theta_diff);
+
+    // Transform the lidar points using translation and rotation
+    for (auto& point : point_cloud_) {
+        Eigen::Vector2f p(point.x(), point.y());
+        p = translation * rotation * p; // Apply translation followed by rotation
+        point.x() = p.x();
+        point.y() = p.y();
+    }
+
+}
 void Navigation::LatencyCompensation() {
   // take the control from latency ago (the control that actually happens now)
   // calculate displacement on x and y axis
   float x_diff = 0.0;
   float y_diff = 0.0;
+  float theta_diff = 0.0;
   float latency_period = ???;
 
   // start forward-predict (accumulate displacement) 
@@ -449,16 +503,28 @@ void Navigation::LatencyCompensation() {
     // Accumulate the displacements
     x_diff += delta_x;
     y_diff += delta_y;
+
+    // Calculate the rotation 
+    theta_diff +=  velocity * curvature * latency_period; // theta = v / r * time
+
   }
   // pop out the oldest control
   control_queue.erase(control_queue.begin());
 
-  // TODO: remember to push the latest control at the end
+  // rotation and translation matrix
+  Eigen::Matrix3f transformation_matrix;
+  transformation_matrix <<
+        std::cos(theta_diff), -std::sin(theta_diff), x_diff,
+        std::sin(theta_diff), std::cos(theta_diff), y_diff,
+        0, 0, 1;
 
-  // transform the lidar 
-  for (auto &point : point_cloud_) {
-    _point.x() = _point.x() - x_diff;
-    _point.y() = _point.y() - y_diff;
+  // Transform the lidar points using translation and rotation
+  for (auto& point : point_cloud_) {
+      // homogeneous coordinates
+      Eigen::Vector3f p(point.x(), point.y(), 1);
+      p = transformation_matrix.inverse() * p;
+      point.x() = p.x();
+      point.y() = p.y();
   }
 
 }
