@@ -115,47 +115,56 @@ void Navigation::ObservePointCloud(const vector<Vector2f>& cloud,
 
 
 float Navigation::ComputeClearance(float free_path_len, float curv) {
-  float min_clearance = 1000.0;
+  float min_clearance = 10.0;
   float r = 1.0 / std::abs(curv);
   float turning_angle = free_path_len / r; // len = r * turning_angle
   float c_max = 3;
 
-  // float car_inner_y = CAR_WIDTH / 2.0 + SAFETY_MARGIN;
-  // float car_outter_y = -car_inner_y;
-  // float car_front_x = (CAR_BASE + CAR_LENGTH) / 2.0 + SAFETY_MARGIN;
+  float car_inner_y = CAR_WIDTH / 2.0 + SAFETY_MARGIN;
+  float car_outter_y = -car_inner_y;
+  float car_front_x = (CAR_BASE + CAR_LENGTH) / 2.0 + SAFETY_MARGIN;
   
   const Vector2f center_pt = Vector2f(0,r);  // turning instant center
-  // const Vector2f car_outter_front_pt = Vector2f(car_front_x,car_outter_y);
+  const Vector2f car_outter_front_pt = Vector2f(car_front_x,car_outter_y);
   
-  // const float r_min = r - (CAR_WIDTH / 2.0 + SAFETY_MARGIN);
-  // const float r_max = (center_pt - car_outter_front_pt ).norm();
-
+  const float r_min = r - (CAR_WIDTH / 2.0 + SAFETY_MARGIN);
+  const float r_max = (center_pt - car_outter_front_pt ).norm();
+  
+  // Calculate clearance (distance to base_link)
   if (curv == 0) {    // straight line
     for (auto point : point_cloud_) {
-      float cur_clearance = point.y() - CAR_WIDTH;
+      // filter out large clearance
+      if (std::abs(point.y()) > c_max) continue;
+      // filter out collision points
+      if (point.y() <= car_inner_y && point.y() >= car_outter_y && point.x() >= car_front_x) {
+        continue;
+      }
+      float cur_clearance = std::abs(point.y());
       min_clearance = std::min(min_clearance,cur_clearance);
     }
 
   } else { // turing 
     
-    // filter not affect point
-  
-
     for (auto point : point_cloud_) {
-      // TODO: if the point will affect the clearance
+      // for right turn
+      if (curv < 0) point.y() = -point.y();
+
       float cur_clearance;
-      float center_to_point_dist = (center_pt - point).norm();
-      // cout << "center_to_point_dist, r: " << center_to_point_dist << ", " << r << endl;
+      float r_p = (center_pt - point).norm();
+      // cout << "r_p, r: " << r_p << ", " << r << endl;
       float p_angle = atan2(point.x(), r - point.y()); // angle: init baselink, center, p
       // cout << "turning_angle, p_angle: " << turning_angle << ", " << p_angle << endl;
-      if (std::abs(center_to_point_dist - r) > c_max || p_angle < 0 || p_angle > turning_angle) { // TODO: condition on turning_angle is an assumption
+      // filter out collision 
+      if (r_min <= r_p && r_p <= r_max) continue;
+      // filter out far point
+      if (std::abs(r_p - r) > c_max || p_angle < 0 || p_angle > turning_angle) { // TODO: condition on turning_angle is an assumption
         continue;
       }
-      cur_clearance = std::abs(center_to_point_dist - r); // |c-p| - rmax
+      cur_clearance = std::abs(r_p - r); // |c-p| - rmax
       // cout << "curv, x, clearance: " << curv << ", " << point.x() << ", " << cur_clearance << endl;
-      if (cur_clearance < min_clearance) {
-          // cout << "min_clearance, x, center_to_point_dist: " << min_clearance << ", " << point.x() << ", " << center_to_point_dist << endl;
-      }
+      // if (cur_clearance < min_clearance) {
+      //     // cout << "min_clearance, x, r_p: " << min_clearance << ", " << point.x() << ", " << r_p << endl;
+      // }
       min_clearance = std::min(min_clearance,cur_clearance);
     }
   }
@@ -177,7 +186,7 @@ PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs) {
     float free_path_len = ComputeFreePathLength(_curv);
     float clearance = ComputeClearance(free_path_len, _curv);
     // float score = free_path_len + score_w * clearance - PENALTY_CURVE * std::abs(_curv);
-    visualization::DrawPathOption(_curv, free_path_len, clearance, 0xFF0000, false, local_viz_msg_);
+    visualization::DrawPathOption(_curv, free_path_len, clearance, 0xFF0000, true, local_viz_msg_);
     float score = free_path_len + score_clearance * clearance + score_curv * std::abs(_curv);
     if (score > highest_score) {
       highest_score = score;
