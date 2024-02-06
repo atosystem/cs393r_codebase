@@ -100,6 +100,9 @@ class Navigation {
   // Compute control commands based on free path length
   float ComputeTOC(float free_path_length);
 
+  // Run sine wave velocity for calculating latency (peroid = T)
+  void RunSineWave(float T);
+
   // for testing
   // visualization
   void drawCar(bool withMargin);

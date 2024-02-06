@@ -399,6 +399,21 @@ void Navigation::drawPointCloud() {
 	}
 }
 
+void Navigation::RunSineWave(float T) {
+
+  static float time_accum = 0;
+
+  // print <drive_msg.vel>,<odemtry_vel>
+
+  drive_msg_.curvature = 0;
+  drive_msg_.velocity = sin(2* M_PI/ T * time_accum);
+  time_accum += dt;
+  if (time_accum>T)
+    time_accum -= T;
+  
+  std::cout<<drive_msg_.velocity<<","<<robot_vel_.norm()<<"\n";
+}
+
 void Navigation::Run() {
   // This function gets called 20 times a second to form the control loop.
   
@@ -422,6 +437,9 @@ void Navigation::Run() {
   // drive_msg_.curvature = ...;
   // drive_msg_.velocity = ...;
   RunAssign1();
+
+  // Run Sine Wave Velocity with peroid = 10 sec
+  // RunSineWave(10);
 
   // Add timestamps to all messages.
   local_viz_msg_.header.stamp = ros::Time::now();
