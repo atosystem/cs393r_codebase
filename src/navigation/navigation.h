@@ -61,6 +61,10 @@ struct PathOption {
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 };
 
+struct Control {
+  float curvature;
+  float velocity;
+}
 class Navigation {
  public:
 
@@ -149,7 +153,9 @@ class Navigation {
   static constexpr float max_speed = 1.0f;
   static constexpr float max_curvature = 1.f / 0.98f;
   static constexpr float max_acceleration = 4.f;
- 
+  
+  // Control queue for latency compensation
+  vector<Control> control_queue;
 };
 
 }  // namespace navigation

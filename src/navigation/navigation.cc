@@ -309,6 +309,7 @@ float Navigation::ComputeFreePathLength(float curvature) {
 
 
 void Navigation::RunAssign1() {
+  LatencyCompensation();
 
   // 1. Generate possible curvatures (kinemetic constraint)
   int num_samples = 10; // ?
@@ -328,6 +329,12 @@ void Navigation::RunAssign1() {
   // std::cout << "Curvature: " << chosen_path.curvature << "; velocity: " << velocity << "\n";
   drive_msg_.curvature = chosen_path.curvature;
   drive_msg_.velocity = velocity;
+
+  // add to the control queue
+  Control latest_control;
+  latest_control.curvature = chosen_path.curvature;
+  latest_control.velocity = velocity;
+  control_queue.push_back(latest_control);
 }
 void Navigation::GenerateCurvatures(int num_samples = 100) {
   if (num_samples % 2 == 0) {
@@ -421,6 +428,39 @@ void Navigation::RunSineWave(float T) {
     time_accum -= T;
   
   std::cout<<drive_msg_.velocity<<","<<robot_vel_.norm()<<"\n";
+}
+
+void Navigation::LatencyCompensation() {
+  // take the control from latency ago (the control that actually happens now)
+  // calculate displacement on x and y axis
+  float x_diff = 0.0;
+  float y_diff = 0.0;
+  float latency_period = ???;
+
+  // start forward-predict (accumulate displacement) 
+  for (auto &control : control_queue) {
+    float curvature = control.curvature;
+    float velocity = control.velocity;
+    
+    // Calculate the x, y displacement
+    float delta_x = velocity * std::cos(curvature) * latency_period;
+    float delta_y = velocity * std::sin(curvature) * latency_period;
+
+    // Accumulate the displacements
+    x_diff += delta_x;
+    y_diff += delta_y;
+  }
+  // pop out the oldest control
+  control_queue.erase(control_queue.begin());
+
+  // TODO: remember to push the latest control at the end
+
+  // transform the lidar 
+  for (auto &point : point_cloud_) {
+    _point.x() = _point.x() - x_diff;
+    _point.y() = _point.y() - y_diff;
+  }
+
 }
 
 void Navigation::Run() {
