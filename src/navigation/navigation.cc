@@ -433,64 +433,68 @@ void Navigation::RunSineWave(float T) {
 
 
 
-float Navigation::LatencyCompensation() {
-  // take the control from latency ago (the control that actually happens now)
-  // calculate displacement on x and y axis
-  float x_diff = 0.0;
-  float y_diff = 0.0;
-  float theta_diff = 0.0;
-  float queue_size = 3;
-  float latency_period = dt * queue_size;
+float Navigation::LatencyCompensation(size_t queue_size) {
+  /*
+    1.  Take the previous sent controls (not applied yet) to
+        calculate where the car will be located and oriented at
+        after the controls are applied.
 
-  if (control_queue.size() < queue_size) return robot_vel_.norm();
+    2.  Use the displacement and orientation change to compute a
+        coordinate transformation matrix. Then apply the inverse of
+        this matrix to the point cloud.
 
-  // start forward-predict (accumulate displacement) 
-  for (auto &control : control_queue) {
-    float curvature = control.curvature;
-    float velocity = control.velocity;
-    
-    // Calculate the x, y displacement
-    float delta_x = velocity * std::cos(curvature) * latency_period;
-    float delta_y = velocity * std::sin(curvature) * latency_period;
+    3.  Return the latest velocity in the control queue.
+  */
 
-    // Accumulate the displacements
-    x_diff += delta_x;
-    y_diff += delta_y;
-
-    // Calculate the rotation 
-    theta_diff +=  velocity * curvature * latency_period; // theta = v / r * time
-
+  if (control_queue.size() < queue_size) {
+    return robot_vel_.norm();
   }
-  cout << "forward-predict: x_diff, y_diff, theta_diff" << x_diff << ", " << y_diff << ", " << theta_diff << endl; 
+
+  // location and orientation w.r.t. original base_link
+  float x = 0.f, y = 0.f;
+  float theta = 0.f;
+
+  for (const auto &control : control_queue) {
+    if (std::abs(control.curvature) < 1E-3f) {
+      // straight line
+      x += control.velocity * std::cos(theta) * dt;
+      y += control.velocity * std::sin(theta) * dt;
+    } else {
+      // curve
+      float theta_prime = theta + control.velocity * control.curvature * dt;
+      x += (-std::sin(theta) + std::sin(theta_prime)) / control.curvature;
+      y += (std::cos(theta) - std::cos(theta_prime)) / control.curvature;
+      theta = theta_prime;
+    }
+  }
+  cout << "forward-predict: (x', y', theta'): (" << x << ", " << y << ", " << theta << ')' << endl;
 
   // rotation and translation matrix
-  Eigen::Matrix3f transformation_matrix;
-  transformation_matrix <<
-        std::cos(theta_diff), -std::sin(theta_diff), x_diff,
-        std::sin(theta_diff), std::cos(theta_diff), y_diff,
-        0, 0, 1;
+  Eigen::Matrix3f transform;
+  transform <<
+        std::cos(theta), -std::sin(theta), x * std::cos(theta) - y * std::sin(theta),
+        std::sin(theta), std::cos(theta), x * std::sin(theta) + y * std::cos(theta),
+        0.f, 0.f, 1.f;
 
   // draw an example
-  Eigen::Vector3f example_pt1(0,0,1);
-  Eigen::Vector3f example_pt2(1,0,1);
-  example_pt1 = transformation_matrix * example_pt1;
-  example_pt2 = transformation_matrix * example_pt2;
-
-  visualization::DrawLine(Vector2f(example_pt1.x(), example_pt1.y()), Vector2f(example_pt2.x(), example_pt2.y()), 0xEB4EED ,local_viz_msg_);
+  // Eigen::Vector3f example_pt1(0,0,1);
+  // Eigen::Vector3f example_pt2(1,0,1);
+  // example_pt1 = transform * example_pt1;
+  // example_pt2 = transform * example_pt2;
+  // visualization::DrawLine(Vector2f(example_pt1.x(), example_pt1.y()), Vector2f(example_pt2.x(), example_pt2.y()), 0xEB4EED ,local_viz_msg_);
 
   // Transform the lidar points using translation and rotation
   for (auto& point : point_cloud_) {
       // homogeneous coordinates
       Eigen::Vector3f p(point.x(), point.y(), 1);
-      p = transformation_matrix.inverse() * p;
-      point.x() = p.x();
-      point.y() = p.y();
+      p = transform.inverse() * p;
+      point.x() = p.x() / p.z();
+      point.y() = p.y() / p.z();
   }
-  float cur_velocity = control_queue[0].velocity;
-  // pop out the oldest control
-  control_queue.erase(control_queue.begin());
-  return cur_velocity;
 
+  // pop out the oldest control and return the lastest velocity
+  control_queue.pop_front();
+  return control_queue.back().velocity;
 }
 
 void Navigation::Run() {
