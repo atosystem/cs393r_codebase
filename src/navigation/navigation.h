@@ -64,7 +64,8 @@ struct PathOption {
 struct Control {
   float curvature;
   float velocity;
-}
+};
+
 class Navigation {
  public:
 
@@ -96,13 +97,13 @@ class Navigation {
   float ComputeFreePathLength(float curvature);
   float ComputeClearance(float free_path_len, float curv);
  
-  
+  float LatencyCompensation();
 
   // Sample candidate curvatures. Only needed for the first time
   void GenerateCurvatures(int num_samples);
 
   // Compute control commands based on free path length
-  float ComputeTOC(float free_path_length);
+  float ComputeTOC(float free_path_length, float velocity);
 
   // Run sine wave velocity for calculating latency (peroid = T)
   void RunSineWave(float T);
@@ -110,6 +111,7 @@ class Navigation {
   // for testing
   // visualization
   void drawCar(bool withMargin);
+
   void drawPointCloud();
  private:
 

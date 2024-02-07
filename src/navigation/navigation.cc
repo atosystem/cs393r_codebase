@@ -186,7 +186,7 @@ PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs) {
     float free_path_len = ComputeFreePathLength(_curv);
     float clearance = ComputeClearance(free_path_len, _curv);
     // float score = free_path_len + score_w * clearance - PENALTY_CURVE * std::abs(_curv);
-    visualization::DrawPathOption(_curv, free_path_len, clearance, 0xFF0000, true, local_viz_msg_);
+    visualization::DrawPathOption(_curv, free_path_len, clearance, 0xFF0000, false, local_viz_msg_);
     float score = free_path_len + score_clearance * clearance + score_curv * std::abs(_curv);
     if (score > highest_score) {
       highest_score = score;
@@ -324,7 +324,7 @@ void Navigation::RunAssign1() {
   // path.curvature, path.free_path_length
 
   // 4. Implement 1-D TOC on the chosen arc.
-  float velocity = ComputeTOC(chosen_path.free_path_length); // calculate velocity
+  float velocity = ComputeTOC(chosen_path.free_path_length, cur_velocity); // calculate velocity
 
   // std::cout << "Curvature: " << chosen_path.curvature << "; velocity: " << velocity << "\n";
   drive_msg_.curvature = chosen_path.curvature;
@@ -433,13 +433,16 @@ void Navigation::RunSineWave(float T) {
 
 
 
-void Navigation::LatencyCompensation() {
+float Navigation::LatencyCompensation() {
   // take the control from latency ago (the control that actually happens now)
   // calculate displacement on x and y axis
   float x_diff = 0.0;
   float y_diff = 0.0;
   float theta_diff = 0.0;
-  float latency_period = ???;
+  float queue_size = 3;
+  float latency_period = dt * queue_size;
+
+  if (control_queue.size() < queue_size) return robot_vel_.norm();
 
   // start forward-predict (accumulate displacement) 
   for (auto &control : control_queue) {
@@ -458,6 +461,7 @@ void Navigation::LatencyCompensation() {
     theta_diff +=  velocity * curvature * latency_period; // theta = v / r * time
 
   }
+  cout << "forward-predict: x_diff, y_diff, theta_diff" << x_diff << ", " << y_diff << ", " << theta_diff << endl; 
 
   // rotation and translation matrix
   Eigen::Matrix3f transformation_matrix;
@@ -465,6 +469,14 @@ void Navigation::LatencyCompensation() {
         std::cos(theta_diff), -std::sin(theta_diff), x_diff,
         std::sin(theta_diff), std::cos(theta_diff), y_diff,
         0, 0, 1;
+
+  // draw an example
+  Eigen::Vector3f example_pt1(0,0,1);
+  Eigen::Vector3f example_pt2(1,0,1);
+  example_pt1 = transformation_matrix * example_pt1;
+  example_pt2 = transformation_matrix * example_pt2;
+
+  visualization::DrawLine(Vector2f(example_pt1.x(), example_pt1.y()), Vector2f(example_pt2.x(), example_pt2.y()), 0xEB4EED ,local_viz_msg_);
 
   // Transform the lidar points using translation and rotation
   for (auto& point : point_cloud_) {
@@ -506,7 +518,7 @@ void Navigation::Run() {
   RunAssign1();
 
   // Run Sine Wave Velocity with peroid = 10 sec
-  // RunSineWave(10);
+  // RunSineWave(3);
 
   // Add timestamps to all messages.
   local_viz_msg_.header.stamp = ros::Time::now();
