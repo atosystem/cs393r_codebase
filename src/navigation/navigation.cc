@@ -309,7 +309,7 @@ float Navigation::ComputeFreePathLength(float curvature) {
 
 
 void Navigation::RunAssign1() {
-  LatencyCompensation();
+  float cur_velocity = LatencyCompensation();
 
   // 1. Generate possible curvatures (kinemetic constraint)
   int num_samples = 10; // ?
@@ -356,8 +356,9 @@ void Navigation::GenerateCurvatures(int num_samples = 100) {
   return;
 }
 
-float Navigation::ComputeTOC(float free_path_length) {
-  float velocity = robot_vel_.norm();
+float Navigation::ComputeTOC(float free_path_length, float cur_velocity) {
+  // float velocity = robot_vel_.norm();
+  float velocity = cur_velocity;
   float min_dist = velocity * velocity / (2 * max_acceleration);
 
   if (free_path_length <= min_dist) {
@@ -431,58 +432,7 @@ void Navigation::RunSineWave(float T) {
 }
 
 
-void Navigation::LatencyCompensation() {
-    // Take the control from latency ago (the control that actually happens now)
-    if (control_queue.empty()) {
-        // No controls in the queue, nothing to compensate
-        return;
-    }
-    Control last_control = control_queue.front(); // Get the oldest control
-    control_queue.pop(); // Remove the oldest control
 
-    // Calculate displacement on x and y axis
-    float x_diff = 0.0;
-    float y_diff = 0.0;
-
-    // Calculate the rotation of the base_link frame
-    float theta_diff = 0.0; // Total angular displacement
-
-    // Start forward-predict (accumulate displacement)
-    for (auto& control : control_queue) {
-        // Loop through each control in the queue
-        float curvature = control.curvature;
-        float velocity = control.velocity;
-
-        // Calculate the x, y displacement
-        float delta_x = velocity * std::cos(curvature) * latency_period;
-        float delta_y = velocity * std::sin(curvature) * latency_period;
-
-        // Accumulate the displacements
-        x_diff += delta_x;
-        y_diff += delta_y;
-
-        // Calculate the angular displacement caused by this control input
-        float delta_theta = velocity * curvature * latency_period;
-
-        // Accumulate the angular displacement
-        theta_diff += delta_theta;
-    }
-
-    // Create translation matrix for x and y displacements
-    Eigen::Translation2f translation(x_diff, y_diff);
-
-    // Create rotation matrix for theta displacement
-    Eigen::Rotation2Df rotation(theta_diff);
-
-    // Transform the lidar points using translation and rotation
-    for (auto& point : point_cloud_) {
-        Eigen::Vector2f p(point.x(), point.y());
-        p = translation * rotation * p; // Apply translation followed by rotation
-        point.x() = p.x();
-        point.y() = p.y();
-    }
-
-}
 void Navigation::LatencyCompensation() {
   // take the control from latency ago (the control that actually happens now)
   // calculate displacement on x and y axis
@@ -508,8 +458,6 @@ void Navigation::LatencyCompensation() {
     theta_diff +=  velocity * curvature * latency_period; // theta = v / r * time
 
   }
-  // pop out the oldest control
-  control_queue.erase(control_queue.begin());
 
   // rotation and translation matrix
   Eigen::Matrix3f transformation_matrix;
@@ -526,6 +474,10 @@ void Navigation::LatencyCompensation() {
       point.x() = p.x();
       point.y() = p.y();
   }
+  float cur_velocity = control_queue[0].velocity;
+  // pop out the oldest control
+  control_queue.erase(control_queue.begin());
+  return cur_velocity;
 
 }
 
