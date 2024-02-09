@@ -131,7 +131,7 @@ void DrawPathOption(const float curvature,
                     bool show_clearance,
                     VisualizationMsg& msg) {
   // TODO: color by clearance.
-  // static const uint32_t kPathColor = 0xC0C0C0;
+  static const uint32_t kPathColor = 0xC0C0C0;
   if (fabs(curvature) < 0.001) {
     DrawLine(Vector2f(0, 0), Vector2f(distance, 0), color, msg);
     if (show_clearance) {
@@ -148,8 +148,8 @@ void DrawPathOption(const float curvature,
     const float a1 = ((curvature > 0.0f) ? (-M_PI_2 + a) : M_PI_2);
     DrawArc(center, fabs(r), a0, a1, color, msg);
     if (show_clearance) {
-      DrawArc(center, max<float>(0, fabs(r) - clearance), a0, a1, color, msg);
-      DrawArc(center, max<float>(0, fabs(r) + clearance), a0, a1, color, msg);
+      DrawArc(center, max<float>(0, fabs(r) - clearance), a0, a1, kPathColor, msg);
+      DrawArc(center, max<float>(0, fabs(r) + clearance), a0, a1, kPathColor, msg);
     }
   }
 }
