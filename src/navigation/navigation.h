@@ -20,6 +20,7 @@
 //========================================================================
 
 #include <vector>
+#include <deque>
 
 #include "eigen3/Eigen/Dense"
 
@@ -97,7 +98,7 @@ class Navigation {
   float ComputeFreePathLength(float curvature);
   float ComputeClearance(float free_path_len, float curv);
  
-  float LatencyCompensation();
+  float LatencyCompensation(size_t queue_size = 3);
 
   // Sample candidate curvatures. Only needed for the first time
   void GenerateCurvatures(int num_samples);
@@ -157,7 +158,7 @@ class Navigation {
   static constexpr float max_acceleration = 4.f;
   
   // Control queue for latency compensation
-  vector<Control> control_queue;
+  std::deque<Control> control_queue;
 };
 
 }  // namespace navigation
