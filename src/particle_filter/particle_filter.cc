@@ -45,6 +45,7 @@ using std::vector;
 using Eigen::Vector2f;
 using Eigen::Vector2i;
 using vector_map::VectorMap;
+using math_util::AngleDiff;
 
 DEFINE_double(num_particles, 50, "Number of particles");
 
@@ -91,11 +92,11 @@ void ParticleFilter::GetPredictedPointCloud(const Vector2f& loc,
     // You can create a new line segment instance as follows, for :
     line2f my_line(1, 2, 3, 4); // Line segment from (1,2) to (3.4).
     // Access the end points using `.p0` and `.p1` members:
-    printf("P0: %f, %f P1: %f,%f\n", 
-           my_line.p0.x(),
-           my_line.p0.y(),
-           my_line.p1.x(),
-           my_line.p1.y());
+    // printf("P0: %f, %f P1: %f,%f\n", 
+    //        my_line.p0.x(),
+    //        my_line.p0.y(),
+    //        my_line.p1.x(),
+    //        my_line.p1.y());
 
     // Check for intersections:
     bool intersects = map_line.Intersects(my_line);
@@ -104,11 +105,11 @@ void ParticleFilter::GetPredictedPointCloud(const Vector2f& loc,
     Vector2f intersection_point; // Return variable
     intersects = map_line.Intersection(my_line, &intersection_point);
     if (intersects) {
-      printf("Intersects at %f,%f\n", 
-             intersection_point.x(),
-             intersection_point.y());
+      // printf("Intersects at %f,%f\n", 
+      //        intersection_point.x(),
+      //        intersection_point.y());
     } else {
-      printf("No intersection\n");
+      // printf("No intersection\n");
     }
   }
 }
@@ -164,9 +165,56 @@ void ParticleFilter::Predict(const Vector2f& odom_loc,
   // You will need to use the Gaussian random number generator provided. For
   // example, to generate a random number from a Gaussian with mean 0, and
   // standard deviation 2:
-  float x = rng_.Gaussian(0.0, 2.0);
-  printf("Random number drawn from Gaussian distribution with 0 mean and "
-         "standard deviation of 2 : %f\n", x);
+  // float x = rng_.Gaussian(0.0, 2.0);
+  // printf("Random number drawn from Gaussian distribution with 0 mean and "
+  //        "standard deviation of 2 : %f\n", x);
+  
+  // initialize the odom
+  if (!odom_initialized_) {
+    prev_odom_loc_ = odom_loc;
+    prev_odom_angle_ = odom_angle;
+    odom_initialized_ = true;
+    return;
+  }
+
+  cout << "predict motion using new odom: " << odom_loc << endl;
+
+  float k1 = 0.1; // trans error from trans model
+  float k2 = 0.1; // rot error from  trans model
+  float k3 = 0.1; // trans error from rot model
+  float k4 = 0.1; // rot error from rot model
+
+  // In odom frame, compute delta x, y and angle 
+  // This is the "car" movement
+  Vector2f dxy_odom = odom_loc - prev_odom_loc_;
+  float dangle_odom = AngleDiff(odom_angle, prev_odom_angle_); // AngleDiff bound the angle into [-pi, pi]
+
+  // For each particles, transform odom movements to map frame, sample noise
+  for (auto &_particle : particles_) {
+
+    // Find transformation to transform points from odom frame to map frame
+    // rot =  angle in map - angle in odom =  _particle.angle - prev_odom_angle_ 
+    Eigen::Rotation2Df R_odom2map(AngleDiff(_particle.angle, prev_odom_angle_));
+    
+    // Transform dxy, dangle from odom frame to map frame
+    Vector2f dxy_map = R_odom2map * dxy_odom; 
+    float dangle_map = dangle_odom; 
+
+    // sample noise
+    float dx_map = rng_.Gaussian(dxy_map.x(), k1*dxy_map.norm() + k2*abs(dangle_map));
+    float dy_map = rng_.Gaussian(dxy_map.y(), k1*dxy_map.norm() + k2*abs(dangle_map));
+    dangle_map = rng_.Gaussian(dangle_map, k3*dxy_map.norm() + k4*abs(dangle_map));
+
+    // update particles
+    _particle.loc.x() = _particle.loc.x() + dx_map;
+    _particle.loc.y() = _particle.loc.y() + dy_map;
+    _particle.angle = _particle.angle + dangle_map;
+  }
+  // update prev odometry to current odom
+  prev_odom_loc_ = odom_loc;
+  prev_odom_angle_ = odom_angle;
+  
+  
 }
 
 void ParticleFilter::Initialize(const string& map_file,
@@ -176,6 +224,28 @@ void ParticleFilter::Initialize(const string& map_file,
   // was received from the log. Initialize the particles accordingly, e.g. with
   // some distribution around the provided location and angle.
   map_.Load(map_file);
+  
+  // TODO: questions: what frame does loc, angle in???? => map
+  // reset the odometry
+  odom_initialized_ = false;
+  // clear the particles
+  particles_.clear();
+
+  // initialize particles 
+  // TODO: require tuning
+  float x_std = 0.1 * 0.0;
+  float y_std = 0.1 * 0.0;
+  float angle_std = M_PI / 9 * 0.0; // 20deg
+  for (int i = 0; i < FLAGS_num_particles; i++) {
+    Particle p;
+    p.loc.x() = rng_.Gaussian(loc.x(), x_std);
+    p.loc.y() =  rng_.Gaussian(loc.y(), y_std);
+    p.angle =  rng_.Gaussian(angle, angle_std);
+    p.weight = 1/FLAGS_num_particles; // TODO: not sure????
+    particles_.push_back(p);
+  }
+  printf("Initialize particles/odom finished.");
+
 }
 
 void ParticleFilter::GetLocation(Eigen::Vector2f* loc_ptr, 
@@ -185,8 +255,23 @@ void ParticleFilter::GetLocation(Eigen::Vector2f* loc_ptr,
   // Compute the best estimate of the robot's location based on the current set
   // of particles. The computed values must be set to the `loc` and `angle`
   // variables to return them. Modify the following assignments:
-  loc = Vector2f(0, 0);
-  angle = 0;
+  // loc = Vector2f(0, 0);
+  // angle = 0;
+
+  // Weighted sum over all particles
+  Vector2f weighted_sum_loc(0.0, 0.0);
+  float weighted_sum_angle = 0.0;
+  for (auto& particle : particles_) {
+    cout << "particle: " << particle.loc << endl;
+    weighted_sum_loc = weighted_sum_loc + particle.weight * particle.loc;
+    weighted_sum_angle = weighted_sum_angle + particle.weight * particle.angle;
+  }
+
+  loc = weighted_sum_loc;
+  angle = weighted_sum_angle;
+  
+  cout << "Get previous odometry: " << prev_odom_loc_ << endl;
+  cout << "Get Location: " << loc << endl;
 }
 
 
