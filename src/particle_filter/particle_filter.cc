@@ -79,6 +79,7 @@ void ParticleFilter::GetPredictedPointCloud(const Vector2f& loc,
 
   // Note: The returned values must be set using the `scan` variable:
   scan.resize(num_ranges);
+  /*
   // Fill in the entries of scan using array writes, e.g. scan[i] = ...
   for (size_t i = 0; i < scan.size(); ++i) {
     scan[i] = Vector2f(0, 0);
@@ -111,6 +112,53 @@ void ParticleFilter::GetPredictedPointCloud(const Vector2f& loc,
     } else {
       // printf("No intersection\n");
     }
+  }*/
+
+  
+  // ian ==== (successfully compile)
+  // I only consider cases when the obstacle is within r_max and r_min or greater than r_max.
+  // 
+  // Location of the laser on the robot. Assumes the laser is forward-facing.
+  const Vector2f kLaserLoc(0.2, 0);
+  Eigen::Rotation2Df r1(angle);
+
+  // lidar center point (map frame)
+  Vector2f laser_loc = loc + r1 * kLaserLoc;
+  float angle_delta = (angle_max - angle_min) / num_ranges;
+  for (size_t i = 0; i < scan.size(); ++i) {
+    float _beamAngle = i * angle_delta - angle_min;
+    
+    line2f my_line(
+      range_min * cos(_beamAngle + angle ) + laser_loc.x(), range_min * sin(_beamAngle + angle ) + laser_loc.y(),
+      range_max * cos(_beamAngle + angle ) + laser_loc.x(), range_max * sin(_beamAngle + angle ) + laser_loc.y());
+
+
+    float shortest_range = range_max;
+    for (size_t i = 0; i < map_.lines.size(); ++i) {
+      const line2f map_line = map_.lines[i];
+      // Check for intersections:
+      bool intersects = map_line.Intersects(my_line);
+      // You can also simultaneously check for intersection, and return the point
+      // of intersection:
+      Vector2f intersection_point; // Return variable
+      intersects = map_line.Intersection(my_line, &intersection_point);
+      if (intersects) {
+        // float r = sqrt(
+        //   pow( (intersection_point.x()-laser_loc.x()), 2 ) + 
+        //   pow( (intersection_point.y()-laser_loc.y()), 2 )
+        // );
+        float r = (intersection_point - laser_loc).norm();
+        if (r < shortest_range)
+        {
+          // we got a shorter distance
+          shortest_range = r;
+        }
+      } else {
+        // scan[i] = Vector2f(range_max * cos(_beamAngle + angle ) + laser_loc.x(), range_max * sin(_beamAngle + angle ) + laser_loc.y());
+      }
+    }
+    // predicted lidar scan at _beamAngle
+    scan[i] = Vector2f(shortest_range * cos(_beamAngle + angle ) + laser_loc.x(), shortest_range * sin(_beamAngle + angle ) + laser_loc.y());
   }
 }
 
@@ -125,6 +173,29 @@ void ParticleFilter::Update(const vector<float>& ranges,
   // observations for each particle, and assign weights to the particles based
   // on the observation likelihood computed by relating the observation to the
   // predicted point cloud.
+
+  // ian =========
+  // Require tuning
+  const float sigma_s = 1.f;
+  const float gamma = 1.f; // 1: uncorrelated, 1/n: perfectly correlated
+  vector<Vector2f> scan;
+  this->GetPredictedPointCloud( p_ptr->loc,
+                                p_ptr->angle ,
+                                ranges.size(),
+                                range_min,
+                                range_max,
+                                angle_min,
+                                angle_max,
+                                &scan);
+  float log_prob = 0;
+  for(size_t i=0; i< scan.size();++i)
+  {
+    float r = (scan[i] - p_ptr->loc).norm();
+    log_prob += -0.5 * pow( r - ranges[i],2) / pow(sigma_s,2);
+  }
+  log_prob = log_prob * gamma;
+  p_ptr->weight = exp(log_prob);
+  // ian =========
 }
 
 void ParticleFilter::Resample() {
@@ -151,18 +222,18 @@ void ParticleFilter::Resample() {
   vector<float> cmf; // cumulative mass function
   cmf.resize(particles_.size()+1);
   cmf[0] = 0;
-  for(long unsigned int i=0; i<particles_.size();++i)
+  for(size_t i=0; i<particles_.size();++i)
   {
     cmf[i+1] = particles_[i].weight + cmf[i];
     particles_[i].weight = 1.0f / particles_.size();
   }
   // add 0.1 to the last boundary, won't affect the sampling
-  cmf[particles_.size()] = 1.1f;
+  cmf[particles_.size()] += 0.1f;
 
   // During resampling: 
-  for(long unsigned int i=0; i<particles_.size();++i)
+  for(size_t i=0; i<particles_.size();++i)
   {
-    float x = rng_.UniformRandom(0, 1);
+    float x = rng_.UniformRandom(0, cmf[particles_.size()] - 0.1f);
     auto upper = std::upper_bound(cmf.begin(),cmf.end(),x);
     int idx = std::distance(cmf.begin(), upper) - 1;
     new_particles.push_back(particles_[idx]);
@@ -180,6 +251,18 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
                                   float angle_max) {
   // A new laser scan observation is available (in the laser frame)
   // Call the Update and Resample steps as necessary.
+  // ian =====
+  // might need some heuristic to determine whether or not to update
+  for(size_t i=0;i<particles_.size();++i)
+  {
+    this->Update( ranges,
+                  range_min,
+                  range_max,
+                  angle_min,
+                  angle_max,
+                  &particles_[i]);
+  }
+  this->Resample();
 }
 
 void ParticleFilter::Predict(const Vector2f& odom_loc,
