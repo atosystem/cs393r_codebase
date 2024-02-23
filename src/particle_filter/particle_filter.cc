@@ -140,9 +140,37 @@ void ParticleFilter::Resample() {
 
   // You will need to use the uniform random number generator provided. For
   // example, to generate a random number between 0 and 1:
-  float x = rng_.UniformRandom(0, 1);
-  printf("Random number drawn from uniform distribution between 0 and 1: %f\n",
-         x);
+  // float x = rng_.UniformRandom(0, 1);
+  // printf("Random number drawn from uniform distribution between 0 and 1: %f\n",
+  //        x);
+
+  // ian ===== (successfully compile)
+  vector<Particle> new_particles;
+  new_particles.resize(particles_.size());
+
+  vector<float> cmf; // cumulative mass function
+  cmf.resize(particles_.size()+1);
+  cmf[0] = 0;
+  for(long unsigned int i=0; i<particles_.size();++i)
+  {
+    cmf[i+1] = particles_[i].weight + cmf[i];
+    particles_[i].weight = 1.0f / particles_.size();
+  }
+  // add 0.1 to the last boundary, won't affect the sampling
+  cmf[particles_.size()] = 1.1f;
+
+  // During resampling: 
+  for(long unsigned int i=0; i<particles_.size();++i)
+  {
+    float x = rng_.UniformRandom(0, 1);
+    auto upper = std::upper_bound(cmf.begin(),cmf.end(),x);
+    int idx = std::distance(cmf.begin(), upper) - 1;
+    new_particles.push_back(particles_[idx]);
+  }
+  // After resampling:
+  particles_ = new_particles;
+
+  // ian =====
 }
 
 void ParticleFilter::ObserveLaser(const vector<float>& ranges,
