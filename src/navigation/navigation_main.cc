@@ -94,8 +94,29 @@ void LaserCallback(const sensor_msgs::LaserScan& msg) {
   // msg.range_max // Maximum observable range
   // msg.range_min // Minimum observable range
   // msg.ranges[i] // The range of the i'th ray
+
+  // clear previous data
+  point_cloud_.clear();
+  
+  float current_angle = msg.angle_min - msg.angle_increment;
+  unsigned int N = floor(( msg.angle_max - msg.angle_min) / msg.angle_increment);
+  for (unsigned int i = 0 ;i < N; ++i )
+  {
+    current_angle += msg.angle_increment;
+    if (msg.ranges[i] >= msg.range_max || msg.ranges[i] <= msg.range_min) {
+      // out of range -> should discard
+      continue;
+    }
+    // convert to euclidean space
+    Vector2f _point( msg.ranges[i] * cos(current_angle) , msg.ranges[i] * sin(current_angle));
+    // consider the shift between lidar and base_link
+    _point = _point + kLaserLoc;
+    point_cloud_.push_back(_point);
+  }
+
   navigation_->ObservePointCloud(point_cloud_, msg.header.stamp.toSec());
   last_laser_msg_ = msg;
+  //std::cout<<"Max Range="<<msg.range_max<<"\n";
 }
 
 void OdometryCallback(const nav_msgs::Odometry& msg) {
