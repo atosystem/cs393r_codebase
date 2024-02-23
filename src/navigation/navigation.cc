@@ -186,7 +186,7 @@ PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs) {
     float free_path_len = ComputeFreePathLength(_curv);
     float clearance = ComputeClearance(free_path_len, _curv);
     // float score = free_path_len + score_w * clearance - PENALTY_CURVE * std::abs(_curv);
-    visualization::DrawPathOption(_curv, free_path_len, clearance, 0xFF0000, false, local_viz_msg_);
+    // visualization::DrawPathOption(_curv, free_path_len, clearance, 0xFF0000, false, local_viz_msg_);
     float score = free_path_len + score_clearance * clearance + score_curv * std::abs(_curv);
     if (score > highest_score) {
       highest_score = score;
@@ -198,7 +198,7 @@ PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs) {
 
   //std::cout<<"Score "<<highest_score<<"\n";
   // draw best option (blue)
-  visualization::DrawPathOption(best_path.curvature,best_path.free_path_length,best_path.clearance,0x0F03FC,false,local_viz_msg_);
+  // visualization::DrawPathOption(best_path.curvature,best_path.free_path_length,best_path.clearance,0x0F03FC,false,local_viz_msg_);
   std::cout<<"Best C="<<best_path.curvature<<" Free Path Length="<<best_path.free_path_length<<"\n";
   
   // just for an example
@@ -514,8 +514,8 @@ void Navigation::Run() {
 
   // visualization
   // car + margin
-  drawCar(true);
-  drawPointCloud();
+  // drawCar(true);
+  // drawPointCloud();
   // Eventually, you will have to set the control values to issue drive commands:
   // drive_msg_.curvature = ...;
   // drive_msg_.velocity = ...;
