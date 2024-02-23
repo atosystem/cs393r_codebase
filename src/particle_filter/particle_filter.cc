@@ -126,12 +126,11 @@ void ParticleFilter::GetPredictedPointCloud(const Vector2f& loc,
   Vector2f laser_loc = loc + r1 * kLaserLoc;
   float angle_delta = (angle_max - angle_min) / num_ranges;
   for (size_t i = 0; i < scan.size(); ++i) {
-    float _beamAngle = i * angle_delta - angle_min;
+    float _beamAngle = i * angle_delta + angle_min;
     
     line2f my_line(
       range_min * cos(_beamAngle + angle ) + laser_loc.x(), range_min * sin(_beamAngle + angle ) + laser_loc.y(),
       range_max * cos(_beamAngle + angle ) + laser_loc.x(), range_max * sin(_beamAngle + angle ) + laser_loc.y());
-
 
     float shortest_range = range_max;
     for (size_t i = 0; i < map_.lines.size(); ++i) {
@@ -143,10 +142,6 @@ void ParticleFilter::GetPredictedPointCloud(const Vector2f& loc,
       Vector2f intersection_point; // Return variable
       intersects = map_line.Intersection(my_line, &intersection_point);
       if (intersects) {
-        // float r = sqrt(
-        //   pow( (intersection_point.x()-laser_loc.x()), 2 ) + 
-        //   pow( (intersection_point.y()-laser_loc.y()), 2 )
-        // );
         float r = (intersection_point - laser_loc).norm();
         if (r < shortest_range)
         {
@@ -158,7 +153,14 @@ void ParticleFilter::GetPredictedPointCloud(const Vector2f& loc,
       }
     }
     // predicted lidar scan at _beamAngle
-    scan[i] = Vector2f(shortest_range * cos(_beamAngle + angle ) + laser_loc.x(), shortest_range * sin(_beamAngle + angle ) + laser_loc.y());
+    // 
+    
+    // uncomment the following line to debug
+    // shortest_range = range_max;
+    scan[i] = Vector2f(
+      shortest_range * cos(_beamAngle + angle ) + laser_loc.x(), 
+      shortest_range * sin(_beamAngle + angle ) + laser_loc.y()
+    );
   }
 }
 
@@ -253,16 +255,16 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
   // Call the Update and Resample steps as necessary.
   // ian =====
   // might need some heuristic to determine whether or not to update
-  for(size_t i=0;i<particles_.size();++i)
-  {
-    this->Update( ranges,
-                  range_min,
-                  range_max,
-                  angle_min,
-                  angle_max,
-                  &particles_[i]);
-  }
-  this->Resample();
+  // for(size_t i=0;i<particles_.size();++i)
+  // {
+  //   this->Update( ranges,
+  //                 range_min,
+  //                 range_max,
+  //                 angle_min,
+  //                 angle_max,
+  //                 &particles_[i]);
+  // }
+  // this->Resample();
 }
 
 void ParticleFilter::Predict(const Vector2f& odom_loc,
@@ -383,6 +385,7 @@ void ParticleFilter::GetLocation(Eigen::Vector2f* loc_ptr,
   
   cout << "Get previous odometry: " << prev_odom_loc_ << endl;
   cout << "Get Location: " << loc << endl;
+  cout << "Get angle: " << angle / M_2PI * 360 << endl;
 }
 
 
