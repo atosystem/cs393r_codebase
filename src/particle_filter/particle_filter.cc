@@ -47,7 +47,7 @@ using Eigen::Vector2i;
 using vector_map::VectorMap;
 using math_util::AngleDiff;
 
-DEFINE_double(num_particles, 3, "Number of particles");
+DEFINE_double(num_particles, 25, "Number of particles");
 
 namespace particle_filter {
 
@@ -191,7 +191,7 @@ void ParticleFilter::Update(const vector<float>& ranges,
                                 &scan);
   float log_prob = 0;
   const Vector2f kLaserLoc(0.2, 0);
-  Eigen::Rotation2Df r1(angle);
+  Eigen::Rotation2Df r1(p_ptr->angle);
   Vector2f laser_loc = p_ptr->loc + r1 * kLaserLoc;
   for(size_t i=0; i< scan.size();++i)
   {
@@ -200,7 +200,8 @@ void ParticleFilter::Update(const vector<float>& ranges,
     log_prob += -0.5 * pow( r - ranges[i],2) / pow(sigma_s,2);
   }
   log_prob = log_prob * gamma;
-  p_ptr->weight = exp(log_prob);
+  p_ptr->weight = log_prob;
+  // p_ptr->weight = exp(log_prob);
   // ian =========
 }
 
@@ -260,7 +261,8 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
   // Call the Update and Resample steps as necessary.
   // ian =====
   // might need some heuristic to determine whether or not to update
-  float prob_sum = 0;
+  // double prob_sum = 0;
+  double max_prob = -std::numeric_limits<double>::infinity();
   for(size_t i=0;i<particles_.size();++i)
   {
     this->Update( ranges,
@@ -269,16 +271,19 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
                   angle_min,
                   angle_max,
                   &particles_[i]);
-    prob_sum += particles_[i].weight;
+    // prob_sum += particles_[i].weight;
+    max_prob = std::max(max_prob, particles_[i].weight);
   }
 
   // normalize
   for(size_t i=0;i<particles_.size();++i)
   {
-    particles_[i].weight /= prob_sum;
+    particles_[i].weight -= max_prob;
+    particles_[i].weight = exp(particles_[i].weight);
+
   }
 
-  // this->Resample();
+  this->Resample();
 }
 
 void ParticleFilter::Predict(const Vector2f& odom_loc,
@@ -389,7 +394,8 @@ void ParticleFilter::GetLocation(Eigen::Vector2f* loc_ptr,
   Vector2f weighted_sum_loc(0.0, 0.0);
   float weighted_sum_angle = 0.0;
   for (auto& particle : particles_) {
-    // cout << "particle: " << particle.loc << endl;
+    cout << "particle: " << particle.loc << endl;
+    cout << "particle weight: " << particle.weight << endl;
     weighted_sum_loc = weighted_sum_loc + particle.weight * particle.loc;
     weighted_sum_angle = weighted_sum_angle + particle.weight * particle.angle;
   }
@@ -398,7 +404,7 @@ void ParticleFilter::GetLocation(Eigen::Vector2f* loc_ptr,
   angle = weighted_sum_angle;
   
   // cout << "Get previous odometry: " << prev_odom_loc_ << endl;
-  // cout << "Get Location: " << loc << endl;
+  cout << "Get Location: " << loc << endl;
   // cout << "Get angle: " << angle / M_2PI * 360 << endl;
 }
 
