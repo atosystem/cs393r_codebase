@@ -232,11 +232,21 @@ void ParticleFilter::Resample() {
   // add 0.1 to the last boundary, won't affect the sampling
   cmf[particles_.size()] += 0.1f;
 
+  /*
+    Low-variance resampling (L8, P47)
+    1. Pick a random number between 0 and 1
+    2. Sample at N equidistant locations after it, wrapping around if needed
+  */
   // During resampling: 
+  const float shift = 1. / particles_.size();
+  float r = rng_.UniformRandom() - shift;
   for(size_t i=0; i<particles_.size();++i)
   {
-    float x = rng_.UniformRandom(0, cmf[particles_.size()] - 0.1f);
-    auto upper = std::upper_bound(cmf.begin(),cmf.end(),x);
+    r += shift;
+    if (r > 1) {
+      r -= 1;
+    }
+    auto upper = std::upper_bound(cmf.begin(),cmf.end(),r);
     int idx = std::distance(cmf.begin(), upper) - 1;
     new_particles.push_back(particles_[idx]);
   }
