@@ -47,7 +47,7 @@ using Eigen::Vector2i;
 using vector_map::VectorMap;
 using math_util::AngleDiff;
 
-DEFINE_double(num_particles, 50, "Number of particles");
+DEFINE_double(num_particles, 3, "Number of particles");
 
 namespace particle_filter {
 
@@ -190,9 +190,13 @@ void ParticleFilter::Update(const vector<float>& ranges,
                                 angle_max,
                                 &scan);
   float log_prob = 0;
+  const Vector2f kLaserLoc(0.2, 0);
+  Eigen::Rotation2Df r1(angle);
+  Vector2f laser_loc = p_ptr->loc + r1 * kLaserLoc;
   for(size_t i=0; i< scan.size();++i)
   {
-    float r = (scan[i] - p_ptr->loc).norm();
+  // lidar center point (map frame)
+    float r = (scan[i] - laser_loc).norm();
     log_prob += -0.5 * pow( r - ranges[i],2) / pow(sigma_s,2);
   }
   log_prob = log_prob * gamma;
@@ -274,7 +278,7 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
     particles_[i].weight /= prob_sum;
   }
 
-  this->Resample();
+  // this->Resample();
 }
 
 void ParticleFilter::Predict(const Vector2f& odom_loc,
