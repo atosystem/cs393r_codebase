@@ -27,6 +27,7 @@
 #include "amrl_msgs/ColoredArc2D.h"
 #include "amrl_msgs/ColoredLine2D.h"
 #include "amrl_msgs/ColoredPoint2D.h"
+#include "amrl_msgs/ColoredText.h"
 #include "amrl_msgs/VisualizationMsg.h"
 #include "ros/ros.h"
 
@@ -37,6 +38,7 @@ using Eigen::Vector2f;
 using amrl_msgs::ColoredArc2D;
 using amrl_msgs::ColoredLine2D;
 using amrl_msgs::ColoredPoint2D;
+using amrl_msgs::ColoredText;
 using amrl_msgs::Pose2Df;
 using amrl_msgs::VisualizationMsg;
 using std::max;
@@ -153,4 +155,20 @@ void DrawPathOption(const float curvature,
     }
   }
 }
+
+void DrawText(
+    const Eigen::Vector2f& start,
+    const uint32_t color,
+    float size_em,
+    const std::string&  text,
+    VisualizationMsg& msg
+) {
+  ColoredText ct;
+  SetPoint(start, &ct.start);
+  ct.color = color;
+  ct.size_em = size_em;
+  ct.text = text;
+  msg.text_annotations.push_back(ct);
+}
+
 }  // namespace visualization
