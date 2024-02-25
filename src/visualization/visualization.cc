@@ -60,6 +60,7 @@ void ClearVisualizationMsg(VisualizationMsg& msg) {
   msg.points.clear();
   msg.lines.clear();
   msg.arcs.clear();
+  msg.text_annotations.clear();
 }
 
 // Return new visualization message, with initialized headers and namespace.
