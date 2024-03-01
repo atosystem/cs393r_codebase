@@ -191,8 +191,8 @@ void ParticleFilter::Update(const vector<float>& ranges,
                                 &scan);
   float log_prob = 0;
   const Vector2f kLaserLoc(0.2, 0);
-  float d_short = 1000;
-  float d_long = 1000;
+  float d_short = 1.0;
+  float d_long = 1.0;
 
   Eigen::Rotation2Df r1(p_ptr->angle);
   Vector2f laser_loc = p_ptr->loc + r1 * kLaserLoc;
