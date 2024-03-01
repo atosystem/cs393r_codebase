@@ -86,6 +86,8 @@ class ParticleFilter {
                               float angle_min,
                               float angle_max,
                               std::vector<Eigen::Vector2f>* scan);
+  
+  void NormalizeParticlesWeights(); 
 
  private:
 
