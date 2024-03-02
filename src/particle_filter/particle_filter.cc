@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <thread>
 #include "eigen3/Eigen/Dense"
 #include "eigen3/Eigen/Geometry"
 #include "gflags/gflags.h"
@@ -273,16 +274,26 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
   // might need some heuristic to determine whether or not to update
   // double prob_sum = 0;
   double max_prob = -std::numeric_limits<double>::infinity();
-  for(size_t i=0;i<particles_.size();++i)
-  {
-    this->Update( ranges,
-                  range_min,
-                  range_max,
-                  angle_min,
-                  angle_max,
-                  &particles_[i]);
-    // prob_sum += particles_[i].weight;
-    max_prob = std::max(max_prob, particles_[i].weight);
+  const int numThreads = std::thread::hardware_concurrency();
+  cout << "numThreads: " << numThreads << endl;
+
+  // parallelize the update step
+  vector<std::thread> workers;
+  workers.reserve(numThreads);
+  for (int i = 0; i < numThreads; ++i) {
+    workers.emplace_back([&](){
+      for(size_t j = i; j < particles_.size(); j += numThreads) {
+        this->Update( ranges,
+                      range_min,
+                      range_max,
+                      angle_min,
+                      angle_max,
+                      &particles_[j]);
+      }
+    });
+  }
+  for (auto& worker : workers) {
+    worker.join();
   }
 
   // normalize
