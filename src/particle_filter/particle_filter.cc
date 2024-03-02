@@ -51,6 +51,17 @@ using math_util::AngleDiff;
 
 DEFINE_double(num_particles, 100, "Number of particles");
 
+CONFIG_FLOAT(x_std, "x_std");
+CONFIG_FLOAT(y_std, "y_std");
+CONFIG_FLOAT(r_std, "r_std");
+CONFIG_FLOAT(k1, "k1");
+CONFIG_FLOAT(k2, "k2");
+CONFIG_FLOAT(k3, "k3");
+CONFIG_FLOAT(k4, "k4");
+CONFIG_FLOAT(sigma_s, "sigma_s");
+CONFIG_FLOAT(gamma_pow, "gamma_pow");
+CONFIG_FLOAT(d_short_d_long, "d_short_d_long");
+
 namespace particle_filter {
 
 config_reader::ConfigReader config_reader_({"config/particle_filter.lua"});
@@ -180,8 +191,8 @@ void ParticleFilter::Update(const vector<float>& ranges,
 
   // ian =========
   // Require tuning
-  const float sigma_s = 1.f;
-  const float gamma = 1.f / ranges.size(); // 1: uncorrelated, 1/n: perfectly correlated
+  const float sigma_s = CONFIG_sigma_s;
+  const float gamma = pow(ranges.size(), CONFIG_gamma_pow); // 1 (pow = 0): uncorrelated, 1/n (pow = -1): perfectly correlated
   vector<Vector2f> scan;
   this->GetPredictedPointCloud( p_ptr->loc,
                                 p_ptr->angle ,
@@ -193,8 +204,8 @@ void ParticleFilter::Update(const vector<float>& ranges,
                                 &scan);
   float log_prob = 0;
   const Vector2f kLaserLoc(0.2, 0);
-  float d_short = 1.0;
-  float d_long = 1.0;
+  float d_short = CONFIG_d_short_d_long;
+  float d_long = CONFIG_d_short_d_long;
 
   Eigen::Rotation2Df r1(p_ptr->angle);
   Vector2f laser_loc = p_ptr->loc + r1 * kLaserLoc;
@@ -234,7 +245,7 @@ void ParticleFilter::Resample() {
   //        x);
 
   // ian ===== (successfully compile)
-  cout<< "Particles cnt: (before,after) " << particles_.size();
+  // cout<< "Particles cnt: (before,after) " << particles_.size();
   vector<Particle> new_particles;
   new_particles.reserve(particles_.size());
 
@@ -269,7 +280,7 @@ void ParticleFilter::Resample() {
   }
   // After resampling:
   particles_ = new_particles;
-  cout<<"  "<< particles_.size() << endl;
+  // cout<<"  "<< particles_.size() << endl;
   // ian =====
 }
 
@@ -286,7 +297,6 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
   std::mutex max_prob_mutex;
   double max_prob = -std::numeric_limits<double>::infinity();
   const int numThreads = std::thread::hardware_concurrency();
-  cout << "numThreads: " << numThreads << endl;
 
   // parallelize the update step
   vector<std::thread> workers;
@@ -344,12 +354,12 @@ void ParticleFilter::Predict(const Vector2f& odom_loc,
     return;
   }
 
-  cout << "predict motion using new odom: " << odom_loc << endl;
+  cout << "predict motion using new odom: " << "(" << odom_loc.x() << ", " << odom_loc.y() << ")" << endl;
 
-  float k1 = 0.1; // trans error from trans model
-  float k2 = 0.1; // rot error from  trans model
-  float k3 = 0.1; // trans error from rot model
-  float k4 = 0.1; // rot error from rot model
+  float k1 = CONFIG_k1; // trans error from trans model
+  float k2 = CONFIG_k2; // trans error from rotat model
+  float k3 = CONFIG_k3; // rotat error from trans model
+  float k4 = CONFIG_k4; // rotat error from rotat model
 
   // In odom frame, compute delta x, y and angle 
   // This is the "car" movement
@@ -399,15 +409,14 @@ void ParticleFilter::Initialize(const string& map_file,
   particles_.clear();
 
   // initialize particles 
-  // TODO: require tuning
-  float x_std = 0.1 * 0.0;
-  float y_std = 0.1 * 0.0;
-  float angle_std = M_PI / 9 * 0.0; // 20deg
+  float x_std = CONFIG_x_std;
+  float y_std = CONFIG_y_std;
+  float r_std = CONFIG_r_std;
   for (int i = 0; i < FLAGS_num_particles; i++) {
     Particle p;
     p.loc.x() = rng_.Gaussian(loc.x(), x_std);
     p.loc.y() =  rng_.Gaussian(loc.y(), y_std);
-    p.angle =  rng_.Gaussian(angle, angle_std);
+    p.angle =  rng_.Gaussian(angle, r_std);
     p.weight = log(1/FLAGS_num_particles); // TODO: not sure????
     particles_.push_back(p);
   }
@@ -436,6 +445,7 @@ void ParticleFilter::NormalizeParticlesWeights() {
      particles_[i].weight = log(particles_[i].weight);
   }
 }
+
 void ParticleFilter::GetLocation(Eigen::Vector2f* loc_ptr, 
                                  float* angle_ptr) const {
   Vector2f& loc = *loc_ptr;
@@ -450,8 +460,8 @@ void ParticleFilter::GetLocation(Eigen::Vector2f* loc_ptr,
   Vector2f weighted_sum_loc(0.0, 0.0);
   float weighted_sum_angle = 0.0;
   for (auto& particle : particles_) {
-    cout << "particle: " << particle.loc << endl;
-    cout << "particle weight: " << particle.weight << endl;
+    // cout << "particle: " << particle.loc << endl;
+    // cout << "particle weight: " << particle.weight << endl;
 
     weighted_sum_loc = weighted_sum_loc + exp(particle.weight) * particle.loc;
     weighted_sum_angle = weighted_sum_angle + exp(particle.weight) * particle.angle;
@@ -461,7 +471,7 @@ void ParticleFilter::GetLocation(Eigen::Vector2f* loc_ptr,
   angle = weighted_sum_angle;
   
   // cout << "Get previous odometry: " << prev_odom_loc_ << endl;
-  cout << "Get Location: " << loc << endl;
+  // cout << "Get Location: " << loc << endl;
   // cout << "Get angle: " << angle / M_2PI * 360 << endl;
 }
 
