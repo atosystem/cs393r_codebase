@@ -48,7 +48,7 @@ using Eigen::Vector2i;
 using vector_map::VectorMap;
 using math_util::AngleDiff;
 
-DEFINE_double(num_particles, 25, "Number of particles");
+DEFINE_double(num_particles, 100, "Number of particles");
 
 namespace particle_filter {
 
@@ -192,16 +192,25 @@ void ParticleFilter::Update(const vector<float>& ranges,
                                 &scan);
   float log_prob = 0;
   const Vector2f kLaserLoc(0.2, 0);
+  float d_short = 1.0;
+  float d_long = 1.0;
+
   Eigen::Rotation2Df r1(p_ptr->angle);
   Vector2f laser_loc = p_ptr->loc + r1 * kLaserLoc;
   for(size_t i=0; i< scan.size();++i)
   {
   // lidar center point (map frame)
     float r = (scan[i] - laser_loc).norm();
-    log_prob += -0.5 * pow( r - ranges[i],2) / pow(sigma_s,2);
+    // cout << " ranges[i] -  r " << ranges[i] -  r << endl;
+    float d = r - ranges[i];
+    
+    d = std::min(d,d_long);
+    d = std::max(d, -d_short);
+  
+    log_prob += -0.5 * pow( d ,2) / pow(sigma_s,2);
   }
   log_prob = log_prob * gamma;
-  p_ptr->weight = log_prob;
+  p_ptr->weight += log_prob;
   // p_ptr->weight = exp(log_prob);
   // ian =========
 }
@@ -233,8 +242,8 @@ void ParticleFilter::Resample() {
   cmf[0] = 0;
   for(size_t i=0; i<particles_.size();++i)
   {
-    cmf[i+1] = particles_[i].weight + cmf[i];
-    particles_[i].weight = 1.0f / particles_.size();
+    cmf[i+1] = exp(particles_[i].weight) + cmf[i];
+    particles_[i].weight = log(1/FLAGS_num_particles); //1.0f / particles_.size();
   }
   // add 0.1 to the last boundary, won't affect the sampling
   cmf[particles_.size()] += 0.1f;
@@ -296,15 +305,16 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
     worker.join();
   }
 
-  // normalize
-  for(size_t i=0;i<particles_.size();++i)
-  {
-    particles_[i].weight -= max_prob;
-    particles_[i].weight = exp(particles_[i].weight);
+  this->NormalizeParticlesWeights();
 
+  const int resample_period = 5;
+  static int resample_cnt = 0;
+  
+  resample_cnt ++;
+  if (resample_cnt == resample_period) {
+    this->Resample();
+    resample_cnt = 0;
   }
-
-  this->Resample();
 }
 
 void ParticleFilter::Predict(const Vector2f& odom_loc,
@@ -394,13 +404,34 @@ void ParticleFilter::Initialize(const string& map_file,
     p.loc.x() = rng_.Gaussian(loc.x(), x_std);
     p.loc.y() =  rng_.Gaussian(loc.y(), y_std);
     p.angle =  rng_.Gaussian(angle, angle_std);
-    p.weight = 1/FLAGS_num_particles; // TODO: not sure????
+    p.weight = log(1/FLAGS_num_particles); // TODO: not sure????
     particles_.push_back(p);
   }
   printf("Initialize particles/odom finished.");
 
 }
 
+void ParticleFilter::NormalizeParticlesWeights() {
+  
+  // normalize max
+  double max_prob = -std::numeric_limits<double>::infinity();
+
+  for (int i = 0; i < FLAGS_num_particles; i++) {
+    max_prob = std::max(max_prob, particles_[i].weight);
+  }
+
+  // normalize sum to 1
+  double sum_prob = 0.0;
+  for (int i = 0; i < FLAGS_num_particles; i++) {
+    particles_[i].weight = exp(particles_[i].weight - max_prob);
+    sum_prob += particles_[i].weight;
+  }
+
+  for (int i = 0; i < FLAGS_num_particles; i++) {
+     particles_[i].weight = particles_[i].weight / sum_prob;
+     particles_[i].weight = log(particles_[i].weight);
+  }
+}
 void ParticleFilter::GetLocation(Eigen::Vector2f* loc_ptr, 
                                  float* angle_ptr) const {
   Vector2f& loc = *loc_ptr;
@@ -410,15 +441,16 @@ void ParticleFilter::GetLocation(Eigen::Vector2f* loc_ptr,
   // variables to return them. Modify the following assignments:
   // loc = Vector2f(0, 0);
   // angle = 0;
-
+  
   // Weighted sum over all particles
   Vector2f weighted_sum_loc(0.0, 0.0);
   float weighted_sum_angle = 0.0;
   for (auto& particle : particles_) {
     cout << "particle: " << particle.loc << endl;
     cout << "particle weight: " << particle.weight << endl;
-    weighted_sum_loc = weighted_sum_loc + particle.weight * particle.loc;
-    weighted_sum_angle = weighted_sum_angle + particle.weight * particle.angle;
+
+    weighted_sum_loc = weighted_sum_loc + exp(particle.weight) * particle.loc;
+    weighted_sum_angle = weighted_sum_angle + exp(particle.weight) * particle.angle;
   }
 
   loc = weighted_sum_loc;

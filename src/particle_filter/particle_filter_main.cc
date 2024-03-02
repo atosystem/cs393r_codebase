@@ -107,13 +107,13 @@ void PublishParticles() {
   particle_filter_.GetParticles(&particles);
   for (const particle_filter::Particle& p : particles) {
     DrawParticle(p.loc, p.angle, vis_msg_);
-    DrawText(
-      p.loc,
-      0x000000,
-      1,
-      std::to_string( round(p.weight * 100) / 100),
-      vis_msg_
-    );
+    // DrawText(
+    //   p.loc,
+    //   0x000000,
+    //   1,
+    //   std::to_string( round(p.weight * 100) / 100),
+    //   vis_msg_
+    // );
   }
 }
 
