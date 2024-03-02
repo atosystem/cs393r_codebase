@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <mutex>
 #include <thread>
 #include "eigen3/Eigen/Dense"
 #include "eigen3/Eigen/Geometry"
@@ -282,6 +283,7 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
   // ian =====
   // might need some heuristic to determine whether or not to update
   // double prob_sum = 0;
+  std::mutex max_prob_mutex;
   double max_prob = -std::numeric_limits<double>::infinity();
   const int numThreads = std::thread::hardware_concurrency();
   cout << "numThreads: " << numThreads << endl;
@@ -298,6 +300,8 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
                       angle_min,
                       angle_max,
                       &particles_[j]);
+        const std::lock_guard<std::mutex> lock(max_prob_mutex);
+        max_prob = std::max(max_prob, particles_[j].weight);
       }
     });
   }
