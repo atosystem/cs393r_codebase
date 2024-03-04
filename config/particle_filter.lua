@@ -21,6 +21,6 @@ k3 = 0.1; -- [0.01, 0.1] with step = 0.01
 k4 = 0.1; -- [0.1, 1] with step = 0.1
 
 --Update()
-sigma_s = 1.0; -- [1.0, 3.0] with step = 0.1
+sigma_s = 1.0; -- [1.0, 3.0] with step = 0.5
 gamma_pow = -1; -- [-1.0, 0.0] with step = 0.1
 d_short_d_long = 1.0; -- (0.5, 1, 3, 5)

@@ -264,6 +264,7 @@ void SignalHandler(int) {
     printf("Force Exit.\n");
     exit(0);
   }
+  particle_filter_.Report();
   printf("Exiting.\n");
   run_ = false;
 }
@@ -283,6 +284,8 @@ int main(int argc, char** argv) {
       n.advertise<amrl_msgs::Localization2DMsg>("localization", 1);
   laser_publisher_ =
       n.advertise<sensor_msgs::LaserScan>("scan", 1);
+
+  particle_filter_.PrintConfigurations();
 
   ProcessLive(&n);
 

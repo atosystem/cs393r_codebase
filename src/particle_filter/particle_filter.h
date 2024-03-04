@@ -74,6 +74,15 @@ class ParticleFilter {
               float angle_max,
               Particle* p);
 
+  // Record loss for expected location (tuning purposes only)
+  void RecordLoss(const std::vector<float>& ranges,
+                  float range_min,
+                  float range_max,
+                  float angle_min,
+                  float angle_max);
+  void Report();
+  void PrintConfigurations();
+
   // Resample particles.
   void Resample();
 
@@ -104,6 +113,10 @@ class ParticleFilter {
   Eigen::Vector2f prev_odom_loc_;
   float prev_odom_angle_;
   bool odom_initialized_;
+
+  // tuning
+  int loss_count_;
+  float loss_sum_;
 };
 }  // namespace slam
 

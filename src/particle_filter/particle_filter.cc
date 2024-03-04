@@ -69,7 +69,9 @@ config_reader::ConfigReader config_reader_({"config/particle_filter.lua"});
 ParticleFilter::ParticleFilter() :
     prev_odom_loc_(0, 0),
     prev_odom_angle_(0),
-    odom_initialized_(false) {}
+    odom_initialized_(false),
+    loss_count_(0),
+    loss_sum_(0.f) {}
 
 void ParticleFilter::GetParticles(vector<Particle>* particles) const {
   *particles = particles_;
@@ -227,6 +229,72 @@ void ParticleFilter::Update(const vector<float>& ranges,
   // ian =========
 }
 
+void ParticleFilter::RecordLoss(const vector<float>& ranges,
+                                float range_min,
+                                float range_max,
+                                float angle_min,
+                                float angle_max) {
+
+  if (!odom_initialized_) {
+    return;
+  }
+
+  // Copy & paste from Update()
+  Vector2f loc;
+  float angle;
+  GetLocation(&loc, &angle);
+  vector<Vector2f> scan;
+  this->GetPredictedPointCloud(loc,
+                               angle,
+                               ranges.size(),
+                               range_min,
+                               range_max,
+                               angle_min,
+                               angle_max,
+                               &scan);
+  const Vector2f kLaserLoc(0.2, 0);
+  const Eigen::Rotation2Df r1(angle);
+  const Vector2f laser_loc = loc + r1 * kLaserLoc;
+
+  // distance between predicted point cloud and observations
+  for (size_t i = 0; i < scan.size(); ++i) {
+    // lidar center point (map frame)
+    const float r = (scan[i] - laser_loc).norm();
+    const float d = pow(r - ranges[i], 2);
+    if (d > 10.f) {
+      continue;
+    }
+    loss_sum_ += d;
+    loss_count_++;
+  }
+}
+
+void ParticleFilter::Report() {
+  if (loss_count_ == 0) {
+    cout << "\n\nAverage Loss: 0\nLoss Count: 0\n\n";
+    return;
+  }
+  cout << "\n\nAverage Loss: " << loss_sum_ / loss_count_
+       << "\nLoss Count: " << loss_count_ << "\n\n";
+  loss_sum_ = 0.f;
+  loss_count_ = 0;
+}
+
+void ParticleFilter::PrintConfigurations() {
+  cout << "\n\n===== Configurations ====="
+       << "\nx_std: " << CONFIG_x_std
+       << "\ny_std: " << CONFIG_y_std
+       << "\nr_std: " << CONFIG_r_std
+       << "\nk1: " << CONFIG_k1
+       << "\nk2: " << CONFIG_k2
+       << "\nk3: " << CONFIG_k3
+       << "\nk4: " << CONFIG_k4
+       << "\nsigma_s: " << CONFIG_sigma_s
+       << "\ngamma_pow: " << CONFIG_gamma_pow
+       << "\nd_short_d_long: " << CONFIG_d_short_d_long
+       << "\n==========================\n\n";
+}
+
 void ParticleFilter::Resample() {
   // Resample the particles, proportional to their weights.
   // The current particles are in the `particles_` variable. 
@@ -291,6 +359,14 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
                                   float angle_max) {
   // A new laser scan observation is available (in the laser frame)
   // Call the Update and Resample steps as necessary.
+
+  // Record loss for expected location (tuning purposes only)
+  RecordLoss(ranges,
+             range_min,
+             range_max,
+             angle_min,
+             angle_max);
+
   // ian =====
   // might need some heuristic to determine whether or not to update
   // double prob_sum = 0;
@@ -354,7 +430,7 @@ void ParticleFilter::Predict(const Vector2f& odom_loc,
     return;
   }
 
-  cout << "predict motion using new odom: " << "(" << odom_loc.x() << ", " << odom_loc.y() << ")" << endl;
+  // cout << "predict motion using new odom: " << "(" << odom_loc.x() << ", " << odom_loc.y() << ")" << endl;
 
   float k1 = CONFIG_k1; // trans error from trans model
   float k2 = CONFIG_k2; // trans error from rotat model
