@@ -151,11 +151,11 @@ void ParticleFilter::GetPredictedPointCloud(const Vector2f& loc,
     for (size_t i = 0; i < map_.lines.size(); ++i) {
       const line2f map_line = map_.lines[i];
       // Check for intersections:
-      bool intersects = map_line.Intersects(my_line);
+      // bool intersects = map_line.Intersects(my_line);
       // You can also simultaneously check for intersection, and return the point
       // of intersection:
       Vector2f intersection_point; // Return variable
-      intersects = map_line.Intersection(my_line, &intersection_point);
+      bool intersects = map_line.Intersection(my_line, &intersection_point);
       if (intersects) {
         float r = (intersection_point - laser_loc).norm();
         if (r < shortest_range)
