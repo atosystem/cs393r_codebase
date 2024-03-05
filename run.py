@@ -9,9 +9,9 @@ roscore, websocket = None, None
 def init():
     global roscore, websocket
     roscore = subprocess.Popen(['roscore'])
-    time.sleep(2)
+    time.sleep(0.5)
     websocket = subprocess.Popen(['/root/ut_automata/bin/websocket'])
-    time.sleep(2)
+    time.sleep(0.5)
 
 def cleanup():
     global roscore, websocket
@@ -23,16 +23,16 @@ def cleanup():
 def run_config(config_path: Path):
     print(f"cp {config_path} config/particle_filter.lua")
     os.system(f"cp {config_path} config/particle_filter.lua")
-    time.sleep(1)
+    time.sleep(0.5)
 
     print(f"./bin/particle_filter > logs/{config_path.stem}.txt")
     particle_filter = subprocess.Popen(['./bin/particle_filter'], stdout=open(f'logs/{config_path.stem}.txt', 'w'))
-    time.sleep(1)
+    time.sleep(0.5)
 
     print("rosbag play GDC3_easy3.bag --topics /scan /odom /set_pose")
     rosbag = subprocess.Popen(['rosbag', 'play', 'GDC3_easy3.bag', '--topics', '/scan', '/odom', '/set_pose'])
     rosbag.wait()
-    time.sleep(1)
+    time.sleep(0.5)
 
     print("Interrupt particle_filter")
     particle_filter.send_signal(signal.SIGINT)
