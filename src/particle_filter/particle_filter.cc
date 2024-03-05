@@ -367,14 +367,8 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
              angle_min,
              angle_max);
 
-  // ian =====
-  // might need some heuristic to determine whether or not to update
-  // double prob_sum = 0;
-  std::mutex max_prob_mutex;
-  double max_prob = -std::numeric_limits<double>::infinity();
-  const int numThreads = std::thread::hardware_concurrency();
-
   // parallelize the update step
+  const int numThreads = std::thread::hardware_concurrency();
   vector<std::thread> workers;
   workers.reserve(numThreads);
   for (int i = 0; i < numThreads; ++i) {
@@ -386,8 +380,6 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
                       angle_min,
                       angle_max,
                       &particles_[j]);
-        const std::lock_guard<std::mutex> lock(max_prob_mutex);
-        max_prob = std::max(max_prob, particles_[j].weight);
       }
     });
   }
@@ -443,6 +435,7 @@ void ParticleFilter::Predict(const Vector2f& odom_loc,
   float dangle_odom = AngleDiff(odom_angle, prev_odom_angle_); // AngleDiff bound the angle into [-pi, pi]
 
   // For each particles, transform odom movements to map frame, sample noise
+  bool weight_change = false;
   for (auto &_particle : particles_) {
 
     // Find transformation to transform points from odom frame to map frame
@@ -458,11 +451,28 @@ void ParticleFilter::Predict(const Vector2f& odom_loc,
     float dy_map = rng_.Gaussian(dxy_map.y(), k1*dxy_map.norm() + k2*abs(dangle_map));
     dangle_map = rng_.Gaussian(dangle_map, k3*dxy_map.norm() + k4*abs(dangle_map));
 
+    const float prev_x = _particle.loc.x();
+    const float prev_y = _particle.loc.y();
+
     // update particles
     _particle.loc.x() = _particle.loc.x() + dx_map;
     _particle.loc.y() = _particle.loc.y() + dy_map;
     _particle.angle = _particle.angle + dangle_map;
+
+    // zero out prob (= assign -inf to log prob) to ``filter out'' the particles that pass through the wall
+    const line2f my_line(prev_x, prev_y, _particle.loc.x(), _particle.loc.y());
+    for (const auto &map_line : map_.lines) {
+      if (map_line.Intersects(my_line)) {
+        weight_change = true;
+        _particle.weight = -std::numeric_limits<double>::infinity();
+        break;
+      }
+    }
   }
+  if (weight_change) {
+    this->NormalizeParticlesWeights();
+  }
+
   // update prev odometry to current odom
   prev_odom_loc_ = odom_loc;
   prev_odom_angle_ = odom_angle;
