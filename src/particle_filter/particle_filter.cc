@@ -389,7 +389,7 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
 
   this->NormalizeParticlesWeights();
 
-  const int resample_period = 5;
+  const int resample_period = 3;
   static int resample_cnt = 0;
   
   resample_cnt ++;
@@ -433,6 +433,7 @@ void ParticleFilter::Predict(const Vector2f& odom_loc,
   // This is the "car" movement
   Vector2f dxy_odom = odom_loc - prev_odom_loc_;
   float dangle_odom = AngleDiff(odom_angle, prev_odom_angle_); // AngleDiff bound the angle into [-pi, pi]
+  // cout << "odom_angle, prev_odom_angle_, dangle_odom, std::abs(dangle_odom) : " << odom_angle << " " <<  prev_odom_angle_ << " " << dangle_odom  << " " << std::std::abs(dangle_odom) << endl;
 
   // For each particles, transform odom movements to map frame, sample noise
   bool weight_change = false;
@@ -445,11 +446,11 @@ void ParticleFilter::Predict(const Vector2f& odom_loc,
     // Transform dxy, dangle from odom frame to map frame
     Vector2f dxy_map = R_odom2map * dxy_odom; 
     float dangle_map = dangle_odom; 
-
+    
     // sample noise
-    float dx_map = rng_.Gaussian(dxy_map.x(), k1*dxy_map.norm() + k2*abs(dangle_map));
-    float dy_map = rng_.Gaussian(dxy_map.y(), k1*dxy_map.norm() + k2*abs(dangle_map));
-    dangle_map = rng_.Gaussian(dangle_map, k3*dxy_map.norm() + k4*abs(dangle_map));
+    float dx_map = rng_.Gaussian(dxy_map.x(), k1*dxy_map.norm() + k2*std::abs(dangle_map));
+    float dy_map = rng_.Gaussian(dxy_map.y(), k1*dxy_map.norm() + k2*std::abs(dangle_map));
+    dangle_map = rng_.Gaussian(dangle_map, k3*dxy_map.norm() + k4*std::abs(dangle_map));
 
     const float prev_x = _particle.loc.x();
     const float prev_y = _particle.loc.y();

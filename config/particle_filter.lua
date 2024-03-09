@@ -14,13 +14,13 @@ r_std = 0.0;
 -- trans error from trans model
 k1 = 0.2;
 -- trans error from rotat model
-k2 = 0.1;
+k2 = 0.05;
 -- rotat error from trans model
-k3 = 0.1;
+k3 = 0.05;
 -- rotat error from rotat model
-k4 = 0.5;
+k4 = 0.05;
 
 --Update()
 sigma_s = 3.0;
 gamma_pow = -0.5;
-d_short_d_long = 0.5;
+d_short_d_long = 0.2;
