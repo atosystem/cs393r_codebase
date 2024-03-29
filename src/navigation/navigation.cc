@@ -53,6 +53,11 @@ AckermannCurvatureDriveMsg drive_msg_;
 const float kEpsilon = 1e-5;
 } //namespace
 
+// Hyperparameters
+#define DIST_NAV_COMPLETE 0.5     // max distance to goal to be considered complete
+#define DIST_REPLAN 10            // min distance to intermediate goal to replan
+#define SCORE_GOAL 1              // weight for distance to goal
+
 namespace navigation {
 
 string GetMapFileFromName(const string& map) {
@@ -82,6 +87,9 @@ Navigation::Navigation(const string& map_name, ros::NodeHandle* n) :
 }
 
 void Navigation::SetNavGoal(const Vector2f& loc, float angle) {
+  nav_goal_loc_ = loc;
+  nav_goal_angle_ = angle;
+  nav_complete_ = false;
 }
 
 void Navigation::UpdateLocation(const Eigen::Vector2f& loc, float angle) {
@@ -112,7 +120,6 @@ void Navigation::ObservePointCloud(const vector<Vector2f>& cloud,
                                    double time) {
   point_cloud_ = cloud;                                     
 }
-
 
 float Navigation::ComputeClearance(float free_path_len, float curv) {
   float min_clearance = 10.0;
@@ -171,7 +178,8 @@ float Navigation::ComputeClearance(float free_path_len, float curv) {
   // cout << "============/=======\n";
   return min_clearance;
 }
-PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs) {
+
+PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs, const Position &goal) {
  
   // PathOption return_path;
 
@@ -179,15 +187,20 @@ PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs) {
   PathOption best_path;
   float score_clearance = 0; // hyper-param
   float score_curv = 0;
+  float score_goal = SCORE_GOAL;
   for (auto _curv : candidate_curvs) {
     // draw options (gray)
     // visualization::DrawPathOption(_curv,1,5,0x808080,false,local_viz_msg_);
 
-    float free_path_len = ComputeFreePathLength(_curv);
+    Position endpoint(-1, -1);
+    float free_path_len = ComputeFreePathLength(_curv, endpoint);
     float clearance = ComputeClearance(free_path_len, _curv);
     // float score = free_path_len + score_w * clearance - PENALTY_CURVE * std::abs(_curv);
     // visualization::DrawPathOption(_curv, free_path_len, clearance, 0xFF0000, false, local_viz_msg_);
-    float score = free_path_len + score_clearance * clearance + score_curv * std::abs(_curv);
+    float score = free_path_len + 
+                  score_clearance * clearance +
+                  score_curv * std::abs(_curv) +
+                  score_goal * (goal - endpoint).norm();
     if (score > highest_score) {
       highest_score = score;
       best_path.curvature = _curv;
@@ -212,7 +225,7 @@ PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs) {
     
 }
 
-float Navigation::ComputeFreePathLength(float curvature) {
+float Navigation::ComputeFreePathLength(float curvature, Position &endpoint) {
    /* notation
   Angle
     theta: turing angle
@@ -295,7 +308,10 @@ float Navigation::ComputeFreePathLength(float curvature) {
         float cur_free_path_length = (theta - omega) * r; // turning_angle * r
 
         //std::cout<<"cur_free_path_length="<<cur_free_path_length<<" free_path_length="<<free_path_length<<"\n";
-        free_path_length = std::min(free_path_length, cur_free_path_length);
+        if (cur_free_path_length < free_path_length) {
+          free_path_length = cur_free_path_length;
+          endpoint = point;
+        }
       } 
     }
     
@@ -307,8 +323,10 @@ float Navigation::ComputeFreePathLength(float curvature) {
 
 }
 
+void Navigation::ObstacleAvoidance() {
+  static Position intermediate_goal(-1, -1);
+  LocalPlanner(intermediate_goal);
 
-void Navigation::RunAssign1() {
   float cur_velocity = LatencyCompensation();
 
   // 1. Generate possible curvatures (kinemetic constraint)
@@ -320,7 +338,7 @@ void Navigation::RunAssign1() {
       // c. Compute Distance To Goal
       // d. Compute total “score”
   // 3. From all paths, pick path with best score
-  PathOption chosen_path = ChoosePath(curvatures_);
+  PathOption chosen_path = ChoosePath(curvatures_, intermediate_goal);
   // path.curvature, path.free_path_length
 
   // 4. Implement 1-D TOC on the chosen arc.
@@ -336,6 +354,7 @@ void Navigation::RunAssign1() {
   latest_control.velocity = velocity;
   control_queue.push_back(latest_control);
 }
+
 void Navigation::GenerateCurvatures(int num_samples = 100) {
   if (num_samples % 2 == 0) {
     num_samples += 1;
@@ -431,8 +450,6 @@ void Navigation::RunSineWave(float T) {
   std::cout<<drive_msg_.velocity<<","<<robot_vel_.norm()<<"\n";
 }
 
-
-
 float Navigation::LatencyCompensation(size_t queue_size) {
   /*
     1.  Take the previous sent controls (not applied yet) to
@@ -497,6 +514,31 @@ float Navigation::LatencyCompensation(size_t queue_size) {
   return control_queue.back().velocity;
 }
 
+void Navigation::GlobalPlanner(vector<Position> &path) {
+  // nav goal: nav_goal_loc_, nav_goal_angle_
+  // robot_loc_: robot_loc_, robot_angle_
+}
+
+void Navigation::LocalPlanner(Position &goal) {
+  static vector<Position> path;
+
+  // check if we need to replan
+  if (goal == Position(-1, -1) || (robot_loc_ - goal).norm() > DIST_REPLAN) {
+    GlobalPlanner(path);
+  }
+
+  // TODO: run through the path and find the farthest valid point
+  goal = path[0];
+}
+
+bool Navigation::CheckNavComplete() {
+  if (nav_complete_) {
+    return true;
+  }
+  nav_complete_ = (robot_loc_ - nav_goal_loc_).norm() < DIST_NAV_COMPLETE;
+  return nav_complete_;
+}
+
 void Navigation::Run() {
   // This function gets called 20 times a second to form the control loop.
   
@@ -507,22 +549,9 @@ void Navigation::Run() {
   // If odometry has not been initialized, we can't do anything.
   if (!odom_initialized_) return;
 
-  // The control iteration goes here. 
-  // Feel free to make helper functions to structure the control appropriately.
-  
-  // The latest observed point cloud is accessible via "point_cloud_"
+  if (CheckNavComplete()) return;
 
-  // visualization
-  // car + margin
-  // drawCar(true);
-  // drawPointCloud();
-  // Eventually, you will have to set the control values to issue drive commands:
-  // drive_msg_.curvature = ...;
-  // drive_msg_.velocity = ...;
-  RunAssign1();
-
-  // Run Sine Wave Velocity with peroid = 10 sec
-  // RunSineWave(3);
+  ObstacleAvoidance();
 
   // Add timestamps to all messages.
   local_viz_msg_.header.stamp = ros::Time::now();

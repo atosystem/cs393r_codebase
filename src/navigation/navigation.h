@@ -67,6 +67,21 @@ struct Control {
   float velocity;
 };
 
+struct Position {
+  float x;
+  float y;
+
+  Position(float x, float y) : x(x), y(y) {}
+
+  bool operator==(const Position& other) const {
+    return x == other.x && y == other.y;
+  }
+
+  bool operator!=(const Position& other) const {
+    return !(*this == other);
+  }
+};
+
 class Navigation {
  public:
 
@@ -91,11 +106,18 @@ class Navigation {
   // Used to set the next target pose.
   void SetNavGoal(const Eigen::Vector2f& loc, float angle);
 
-  void RunAssign1();
+  void ObstacleAvoidance();
 
-  PathOption ChoosePath(const vector<float> &curvatures);
+  void GlobalPlanner(vector<Position> &path);
 
-  float ComputeFreePathLength(float curvature);
+  void LocalPlanner(Position &goal);
+
+  bool CheckNavComplete();
+
+  PathOption ChoosePath(const vector<float> &candidate_curvs, const Position &goal);
+
+  float ComputeFreePathLength(float curvature, Position &endpoint);
+
   float ComputeClearance(float free_path_len, float curv);
  
   float LatencyCompensation(size_t queue_size = 3);
