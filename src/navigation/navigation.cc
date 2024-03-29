@@ -514,9 +514,54 @@ float Navigation::LatencyCompensation(size_t queue_size) {
   return control_queue.back().velocity;
 }
 
+void Navigation::GenerateGraph(vector<vector<int>>& grid) {
+  // fill in the graph, 1: available, -1: unavailable
+
+  // transform map vector to quantized coordinates
+  
+  // 
+  for x ...
+    for y ...
+      for line ....
+        if point_on_line_segment()
+          grid[x][y] = -1
+
+}
+
 void Navigation::GlobalPlanner(vector<Position> &path) {
   // nav goal: nav_goal_loc_, nav_goal_angle_
   // robot_loc_: robot_loc_, robot_angle_
+  /*
+
+  */
+  int h = map_h / fix_res;
+  int w = map_w / fix_res;
+  vector<vector<int>>& graph; // 1: -1: not available
+  
+
+  GenerateGraph(graph);
+
+  frontier = PriorityQueue() // 
+  frontier.put(start, 0)
+  came_from = dict()
+  cost_so_far = dict()
+  came_from[start] = None
+  cost_so_far[start] = 0
+
+  while not frontier.empty():
+    current = frontier.get()
+
+    if current == goal:
+        break
+    
+    for next in graph.neighbors(current):
+        new_cost = cost_so_far[current] + graph.cost(current, next)
+        if next not in cost_so_far or new_cost < cost_so_far[next]:
+          cost_so_far[next] = new_cost
+          priority = new_cost + heuristic(goal, next)
+          frontier.put(next, priority)
+          came_from[next] = current
+
 }
 
 void Navigation::LocalPlanner(Position &goal) {

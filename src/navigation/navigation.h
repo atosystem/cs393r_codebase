@@ -185,4 +185,13 @@ class Navigation {
 
 }  // namespace navigation
 
+class Graph {
+  vector<vector<int>>& graph;
+  std::unordered_map<GridLocation, GridLocation> came_from;
+  std::unordered_map<GridLocation, double> cost_so_far;
+
+  void GenerateGraph();
+  void AStarSearch();
+
+}
 #endif  // NAVIGATION_H
