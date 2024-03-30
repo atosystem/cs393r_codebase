@@ -31,6 +31,7 @@
 #include "shared/math/math_util.h"
 #include "shared/util/timer.h"
 #include "shared/ros/ros_helpers.h"
+#include "config_reader/config_reader.h"
 #include "navigation.h"
 #include "visualization/visualization.h"
 
@@ -39,6 +40,7 @@ using amrl_msgs::AckermannCurvatureDriveMsg;
 using amrl_msgs::VisualizationMsg;
 using std::string;
 using std::vector;
+using geometry::line2f;
 
 using namespace math_util;
 using namespace ros_helpers;
@@ -54,11 +56,16 @@ const float kEpsilon = 1e-5;
 } //namespace
 
 // Hyperparameters
+CONFIG_FLOAT(grid_dx, "grid_dx"); // dx for grid construction
+CONFIG_FLOAT(grid_dy, "grid_dy"); // dy for grid construction
+
 #define DIST_NAV_COMPLETE 0.5     // max distance to goal to be considered complete
 #define DIST_REPLAN 10            // min distance to intermediate goal to replan
 #define SCORE_GOAL 1              // weight for distance to goal
 
 namespace navigation {
+
+config_reader::ConfigReader config_reader_({"config/navigation.lua"});
 
 string GetMapFileFromName(const string& map) {
   string maps_dir_ = ros::package::getPath("amrl_maps");
@@ -179,7 +186,7 @@ float Navigation::ComputeClearance(float free_path_len, float curv) {
   return min_clearance;
 }
 
-PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs, const Position &goal) {
+PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs, const Eigen::Vector2f &goal) {
  
   // PathOption return_path;
 
@@ -192,7 +199,7 @@ PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs, const Po
     // draw options (gray)
     // visualization::DrawPathOption(_curv,1,5,0x808080,false,local_viz_msg_);
 
-    Position endpoint(-1, -1);
+    Eigen::Vector2f endpoint(-1, -1);
     float free_path_len = ComputeFreePathLength(_curv, endpoint);
     float clearance = ComputeClearance(free_path_len, _curv);
     // float score = free_path_len + score_w * clearance - PENALTY_CURVE * std::abs(_curv);
@@ -225,7 +232,7 @@ PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs, const Po
     
 }
 
-float Navigation::ComputeFreePathLength(float curvature, Position &endpoint) {
+float Navigation::ComputeFreePathLength(float curvature, Eigen::Vector2f &endpoint) {
    /* notation
   Angle
     theta: turing angle
@@ -324,7 +331,7 @@ float Navigation::ComputeFreePathLength(float curvature, Position &endpoint) {
 }
 
 void Navigation::ObstacleAvoidance() {
-  static Position intermediate_goal(-1, -1);
+  static Eigen::Vector2f intermediate_goal(-1, -1);
   LocalPlanner(intermediate_goal);
 
   float cur_velocity = LatencyCompensation();
@@ -514,66 +521,56 @@ float Navigation::LatencyCompensation(size_t queue_size) {
   return control_queue.back().velocity;
 }
 
-void Navigation::GenerateGraph(vector<vector<int>>& grid) {
-  // fill in the graph, 1: available, -1: unavailable
-
-  // transform map vector to quantized coordinates
-  
-  // 
-  for x ...
-    for y ...
-      for line ....
-        if point_on_line_segment()
-          grid[x][y] = -1
-
-}
-
-void Navigation::GlobalPlanner(vector<Position> &path) {
+// void Navigation::GlobalPlanner(vector<Position> &path) {
+void Navigation::GlobalPlanner(vector<Eigen::Vector2f> &path) {
+  static MapGraph mapGraph(map_);
+  mapGraph.drawObstacleGrid();
   // nav goal: nav_goal_loc_, nav_goal_angle_
   // robot_loc_: robot_loc_, robot_angle_
   /*
 
   */
-  int h = map_h / fix_res;
-  int w = map_w / fix_res;
-  vector<vector<int>>& graph; // 1: -1: not available
-  
+  // int h = map_h / fix_res;
+  // int w = map_w / fix_res;
+  // vector<vector<int>>& graph; // 1: -1: not available
 
-  GenerateGraph(graph);
+  //  graph (bool: Obstacle->False)
+  // static vector<vector<bool>> obstacle_graph;
+  // this->GenerateGraph(obstacle_graph);
 
-  frontier = PriorityQueue() // 
-  frontier.put(start, 0)
-  came_from = dict()
-  cost_so_far = dict()
-  came_from[start] = None
-  cost_so_far[start] = 0
+  // frontier = PriorityQueue() // 
+  // frontier.put(start, 0)
+  // came_from = dict()
+  // cost_so_far = dict()
+  // came_from[start] = None
+  // cost_so_far[start] = 0
 
-  while not frontier.empty():
-    current = frontier.get()
+  // while not frontier.empty():
+  //   current = frontier.get()
 
-    if current == goal:
-        break
+  //   if current == goal:
+  //       break
     
-    for next in graph.neighbors(current):
-        new_cost = cost_so_far[current] + graph.cost(current, next)
-        if next not in cost_so_far or new_cost < cost_so_far[next]:
-          cost_so_far[next] = new_cost
-          priority = new_cost + heuristic(goal, next)
-          frontier.put(next, priority)
-          came_from[next] = current
+  //   for next in graph.neighbors(current):
+  //       new_cost = cost_so_far[current] + graph.cost(current, next)
+  //       if next not in cost_so_far or new_cost < cost_so_far[next]:
+  //         cost_so_far[next] = new_cost
+  //         priority = new_cost + heuristic(goal, next)
+  //         frontier.put(next, priority)
+  //         came_from[next] = current
 
 }
 
-void Navigation::LocalPlanner(Position &goal) {
-  static vector<Position> path;
+void Navigation::LocalPlanner(Eigen::Vector2f &goal) {
+  static vector<Eigen::Vector2f> path;
 
-  // check if we need to replan
-  if (goal == Position(-1, -1) || (robot_loc_ - goal).norm() > DIST_REPLAN) {
-    GlobalPlanner(path);
-  }
+  // // check if we need to replan
+  // if (goal == Position(-1, -1) || (robot_loc_ - goal).norm() > DIST_REPLAN) {
+  //   GlobalPlanner(path);
+  // }
 
-  // TODO: run through the path and find the farthest valid point
-  goal = path[0];
+  // // TODO: run through the path and find the farthest valid point
+  // goal = path[0];
 }
 
 bool Navigation::CheckNavComplete() {
@@ -594,9 +591,12 @@ void Navigation::Run() {
   // If odometry has not been initialized, we can't do anything.
   if (!odom_initialized_) return;
 
-  if (CheckNavComplete()) return;
+  // if (CheckNavComplete()) return;
+  vector<Eigen::Vector2f> pp;
+  GlobalPlanner(pp);
 
-  ObstacleAvoidance();
+
+  // ObstacleAvoidance();
 
   // Add timestamps to all messages.
   local_viz_msg_.header.stamp = ros::Time::now();
@@ -606,6 +606,137 @@ void Navigation::Run() {
   viz_pub_.publish(local_viz_msg_);
   viz_pub_.publish(global_viz_msg_);
   drive_pub_.publish(drive_msg_);
+}
+
+MapGraph::MapGraph(const vector_map::VectorMap& map_) {
+  // initilize graph
+  cout<<"Initialize Grid:"<<endl;
+  cout<<"CONFIG_grid_dx: "<<CONFIG_grid_dx<<endl;
+  cout<<"CONFIG_grid_dy: "<<CONFIG_grid_dy<<endl;
+
+  // get bounradies of the map
+  for (size_t i = 0; i < map_.lines.size(); ++i) {
+    const line2f map_line = map_.lines[i];
+    this->map_max_x = std::max(this->map_max_x,map_line.p0.x());
+    this->map_max_x = std::max(this->map_max_x,map_line.p1.x());
+    this->map_min_x = std::min(this->map_min_x,map_line.p0.x());
+    this->map_min_x = std::min(this->map_min_x,map_line.p1.x());
+
+    this->map_max_y = std::max(this->map_max_y,map_line.p0.y());
+    this->map_max_y = std::max(this->map_max_y,map_line.p1.y());
+    this->map_min_y = std::min(this->map_min_y,map_line.p0.y());
+    this->map_min_y = std::min(this->map_min_y,map_line.p1.y());
+
+
+
+  }
+
+  cout<<"map_max_x="<<this->map_max_x<<endl;
+  cout<<"map_min_x="<<this->map_min_x<<endl;
+  cout<<"map_max_y="<<this->map_max_y<<endl;
+  cout<<"map_min_y="<<this->map_min_y<<endl;
+
+  // initialize obstacle_grid
+  obstacle_grid.clear();
+  // obstacle_grid [x][y]
+  // only define in first quadrant (x>0, y>0)
+
+  grid_num_x = std::round( (map_max_x - map_min_x) / CONFIG_grid_dx );
+  grid_num_y = std::round( (map_max_y - map_min_y) / CONFIG_grid_dy );
+
+  cout<<"grid width(x)="<<grid_num_x<<endl;
+  cout<<"grid height(y)="<<grid_num_y<<endl;
+
+  obstacle_grid.resize(grid_num_x);
+  for (int i = 0; i < grid_num_x; ++i) {
+    obstacle_grid[i].resize(grid_num_y);
+  }
+
+  for (int i_x = 0; i_x < grid_num_x; ++i_x) {
+    for (int i_y = 0; i_y < grid_num_y; ++i_y) {
+      GridLocation p(i_x,i_y);
+      obstacle_grid[i_x][i_y] = false;
+      for (size_t line_i = 0; line_i < map_.lines.size(); ++line_i) {
+        const line2f map_line = map_.lines[line_i];
+
+        GridLocation p0 = point2GridLoc(map_line.p0);
+        GridLocation p1 = point2GridLoc(map_line.p1);
+
+        if (pointOnLineSegment(p,p0,p1)) {
+          obstacle_grid[i_x][i_y] = true;
+          break;
+        }
+      }
+    }
+  }
+
+}
+
+void MapGraph::drawObstacleGrid() {
+  // draw gridlines (dark blue), cross (dark blue) as obstacles
+
+  for (int i = 0; i < grid_num_x; ++i) {
+    Vector2f pt_a(i * CONFIG_grid_dx + map_min_x, map_min_y);
+    Vector2f pt_b(i * CONFIG_grid_dx + map_min_x, grid_num_y * CONFIG_grid_dy + map_min_y);
+    visualization::DrawLine(pt_a,pt_b,0x0502e2, global_viz_msg_);
+  }
+  for (int i = 0; i < grid_num_y; ++i) {
+    Vector2f pt_a(map_min_x, i * CONFIG_grid_dy + map_min_y);
+    Vector2f pt_b(grid_num_x * CONFIG_grid_dx + map_min_x, i * CONFIG_grid_dy + map_min_y);
+    visualization::DrawLine(pt_a,pt_b,0x0502e2, global_viz_msg_);
+  }
+
+  for (int i_x = 0; i_x < grid_num_x; ++i_x) {
+    for (int i_y = 0; i_y < grid_num_y; ++i_y) {
+      if (obstacle_grid[i_x][i_y]) {
+        Vector2f pt = gridLoc2point(GridLocation(i_x,i_y));
+        visualization::DrawCross(
+          pt,
+          CONFIG_grid_dx / 2.0,
+          0x0502e2,
+          global_viz_msg_
+        );
+      }
+    }
+  }
+
+}
+
+GridLocation MapGraph::point2GridLoc(const Eigen::Vector2f& _point) {
+  return GridLocation(
+    std::round( (_point.x() - this->map_min_x) / CONFIG_grid_dx),
+    std::round( (_point.y() - this->map_min_y) / CONFIG_grid_dy)
+  );
+}
+
+Eigen::Vector2f MapGraph::gridLoc2point(const GridLocation& _gridLoc) {
+  Eigen::Vector2f _pt(
+    _gridLoc.x * CONFIG_grid_dx + this->map_min_x,
+    _gridLoc.y * CONFIG_grid_dy + this->map_min_y
+  );
+  return _pt;
+}
+
+bool MapGraph::isFree(const GridLocation& _gridLoc) {
+  return !(obstacle_grid[_gridLoc.x][_gridLoc.y]);
+}
+
+bool MapGraph::pointOnLineSegment(const GridLocation& _p, const GridLocation& _p0, const GridLocation& _p1 ) {
+  // check if in bounded box
+  if ( !((_p.x >= _p1.x && _p.x <= _p0.x)  ||  (_p.x <= _p1.x && _p.x >= _p0.x))  ) return false;
+  if ( !((_p.y >= _p1.y && _p.y <= _p0.y)  ||  (_p.y <= _p1.y && _p.y >= _p0.y))  ) return false;
+
+  // check if on line segment
+  Eigen::Vector3f vec_p0_p( _p.x - _p0.x, _p.y - _p0.y , 0);
+  Eigen::Vector3f vec_p0_p1( _p1.x - _p0.x, _p1.y - _p0.y, 0 );
+
+  float cross_product = vec_p0_p.cross(vec_p0_p1).z();
+
+  if (cross_product == 0) {
+    return true;
+  } else {
+    return false;
+  }
 }
 
 }  // namespace navigation

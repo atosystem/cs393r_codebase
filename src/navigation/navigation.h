@@ -21,6 +21,7 @@
 
 #include <vector>
 #include <deque>
+#include <unordered_map>
 
 #include "eigen3/Eigen/Dense"
 
@@ -67,18 +68,17 @@ struct Control {
   float velocity;
 };
 
-struct Position {
-  float x;
-  float y;
+struct GridLocation {
+  int x;
+  int y;
+  GridLocation(int x,int y): x(x),y(y) {}
 
-  Position(float x, float y) : x(x), y(y) {}
-
-  bool operator==(const Position& other) const {
-    return x == other.x && y == other.y;
-  }
-
-  bool operator!=(const Position& other) const {
-    return !(*this == other);
+  GridLocation operator-(const GridLocation& other) {
+    GridLocation new_loc(
+      this->x - other.x,
+      this->y - other.y
+    );
+    return new_loc;
   }
 };
 
@@ -108,15 +108,9 @@ class Navigation {
 
   void ObstacleAvoidance();
 
-  void GlobalPlanner(vector<Position> &path);
+  PathOption ChoosePath(const vector<float> &candidate_curvs, const Eigen::Vector2f &goal);
 
-  void LocalPlanner(Position &goal);
-
-  bool CheckNavComplete();
-
-  PathOption ChoosePath(const vector<float> &candidate_curvs, const Position &goal);
-
-  float ComputeFreePathLength(float curvature, Position &endpoint);
+  float ComputeFreePathLength(float curvature, Eigen::Vector2f &endpoint);
 
   float ComputeClearance(float free_path_len, float curv);
  
@@ -131,11 +125,21 @@ class Navigation {
   // Run sine wave velocity for calculating latency (peroid = T)
   void RunSineWave(float T);
 
+  // navigation
+  void GlobalPlanner(vector<Eigen::Vector2f> &path);
+
+  void LocalPlanner(Eigen::Vector2f &goal);
+
+  bool CheckNavComplete();
+
   // for testing
   // visualization
   void drawCar(bool withMargin);
 
   void drawPointCloud();
+
+  void drawGraph();
+
  private:
 
   // Whether odometry has been initialized.
@@ -181,17 +185,48 @@ class Navigation {
   
   // Control queue for latency compensation
   std::deque<Control> control_queue;
+
+};
+
+class MapGraph {
+  public:
+    MapGraph(const vector_map::VectorMap& );
+    
+    // check if the location is free of obstacle
+    bool isFree(const GridLocation&);
+
+    // convert a given point(map frame) to GridLocation
+    // a quantization is performed
+    GridLocation point2GridLoc(const Eigen::Vector2f&);
+
+    // convert GridLoc to coordinate in map frame
+    Eigen::Vector2f gridLoc2point(const GridLocation&);
+
+    // draw gridlines (dark blue), cross (dark blue) as obstacles
+    void drawObstacleGrid();
+    
+
+  private:  
+    // check if point _p is on line segment _p0->_p1
+    bool pointOnLineSegment(const GridLocation& _p, const GridLocation& _p0, const GridLocation& _p1 );
+    // true: obstacle, false: free
+    vector<vector<bool>> obstacle_grid;
+    int grid_num_x = 0;
+    int grid_num_y = 0;
+    float map_max_x = 0;
+    float map_min_x = 0;
+    float map_max_y = 0;
+    float map_min_y = 0;
+    
+  // vector<vector<int>>& graph;
+  // std::unordered_map<GridLocation, GridLocation> came_from;
+  // std::unordered_map<GridLocation, double> cost_so_far;
+
+  // void GenerateGraph();
+  // void AStarSearch();
+
 };
 
 }  // namespace navigation
 
-class Graph {
-  vector<vector<int>>& graph;
-  std::unordered_map<GridLocation, GridLocation> came_from;
-  std::unordered_map<GridLocation, double> cost_so_far;
-
-  void GenerateGraph();
-  void AStarSearch();
-
-}
 #endif  // NAVIGATION_H
