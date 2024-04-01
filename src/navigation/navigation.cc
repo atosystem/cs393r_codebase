@@ -520,6 +520,111 @@ float Navigation::LatencyCompensation(size_t queue_size) {
   control_queue.pop_front();
   return control_queue.back().velocity;
 }
+void MapGraph::backtrackPath(const GridLocation& start, 
+                        const GridLocation& goal, 
+                        std::map<GridLocation, GridLocation>& came_from,
+                        vector<GridLocation>& path) 
+{
+
+  
+  GridLocation current(goal.x, goal.y);
+  if (came_from.find(goal) == came_from.end()) {
+    return; // no path can be found
+  }
+  while (current != start) {
+    path.push_back(current);
+    GridLocation temp;
+    temp.x = came_from[current].x;
+    temp.y = came_from[current].y;
+    current.x = temp.x;
+    current.y = temp.y;
+  }
+  path.push_back(start); // optional
+  std::reverse(path.begin(), path.end());
+
+}
+
+double MapGraph::getEdgeCost(const GridLocation& p1, const GridLocation& p2) {
+  // Calculate the difference between x and y coordinates
+  float dx = (p2.x - p1.x) * 1.0;
+  float dy = (p2.y - p1.y) * 1.0;
+
+  // Calculate the L2 norm (Euclidean distance)
+  double distance = std::sqrt(dx * dx + dy * dy);
+
+  return distance;
+}
+double MapGraph::getHeuristic(const GridLocation& p1, const GridLocation& p2) {
+  // Calculate the difference between x and y coordinates
+  float dx = (p2.x - p1.x) * 1.0;
+  float dy = (p2.y - p1.y) * 1.0;
+
+  // Calculate the L2 norm (Euclidean distance)
+  double distance = std::sqrt(dx * dx + dy * dy);
+
+  return distance;
+}
+
+vector<GridLocation> MapGraph::getNeighbors(const GridLocation current) {
+  vector<vector<int>> DIRS = {{0, 1}, {0, -1}, {1, 1}, {1, 0}, {1, -1}, {-1, 1}, {-1, 0}, {-1, -1}};
+  vector<GridLocation> neighbors;
+
+  int grid_h = obstacle_grid.size();
+  int grid_w = obstacle_grid[0].size();
+
+  for (auto dir : DIRS) {
+    GridLocation neighbor(current.x + dir[0], current.y + dir[1]);
+    if (neighbor.x >= 0 && neighbor.x < grid_h && neighbor.y >= 0 
+        && neighbor.y < grid_w && !obstacle_grid[neighbor.x][neighbor.y]) {
+          neighbors.push_back(neighbor);
+    }
+  }
+
+  return neighbors;
+
+}
+
+void MapGraph::aStarSearch(const GridLocation& start, 
+                          const GridLocation& goal, 
+                          vector<GridLocation>& path) 
+{
+    std::map<GridLocation, GridLocation> came_from;
+    std::map<GridLocation, double> cost_so_far;
+
+    // PriorityQueue<GridLocation, double> frontier;
+    std::priority_queue<std::pair<double, GridLocation>, vector<std::pair<double, GridLocation>>, std::greater<std::pair<double, GridLocation>>> frontier;
+    frontier.push({0, start});
+    came_from[start] = start;
+    cost_so_far[start] = 0;
+  
+    while (!frontier.empty()) {
+      GridLocation current = frontier.top().second;
+      frontier.pop();
+      // cout << "current: " << current.x << " " << current.y << endl;
+      // cout << "start: " << start.x << " " << start.y << endl;
+      // cout << "goal: " << goal.x << " " << goal.y << endl;
+      if (current == goal) break;
+
+      for (GridLocation next : getNeighbors(current)) {
+        double new_cost = cost_so_far[current] + getEdgeCost(current, next);
+        if (cost_so_far.find(next) == cost_so_far.end()
+            || new_cost < cost_so_far[next]) {
+          // cout << "next: " << next.x << " " << next.y << endl;
+          cost_so_far[next] = new_cost;
+          double priority = new_cost + getHeuristic(next, goal);
+          frontier.push({priority, next});
+          // frontier.put(next, priority);
+          came_from[next] = current;
+        }
+      }
+    }
+
+    backtrackPath(start, goal, came_from, path);
+
+
+
+}
+vector<Eigen::Vector2f> pp;
 
 // void Navigation::GlobalPlanner(vector<Position> &path) {
 void Navigation::GlobalPlanner(vector<Eigen::Vector2f> &path) {
@@ -527,37 +632,32 @@ void Navigation::GlobalPlanner(vector<Eigen::Vector2f> &path) {
   mapGraph.drawObstacleGrid();
   // nav goal: nav_goal_loc_, nav_goal_angle_
   // robot_loc_: robot_loc_, robot_angle_
-  /*
-
-  */
-  // int h = map_h / fix_res;
-  // int w = map_w / fix_res;
-  // vector<vector<int>>& graph; // 1: -1: not available
-
-  //  graph (bool: Obstacle->False)
-  // static vector<vector<bool>> obstacle_graph;
-  // this->GenerateGraph(obstacle_graph);
-
-  // frontier = PriorityQueue() // 
-  // frontier.put(start, 0)
-  // came_from = dict()
-  // cost_so_far = dict()
-  // came_from[start] = None
-  // cost_so_far[start] = 0
-
-  // while not frontier.empty():
-  //   current = frontier.get()
-
-  //   if current == goal:
-  //       break
-    
-  //   for next in graph.neighbors(current):
-  //       new_cost = cost_so_far[current] + graph.cost(current, next)
-  //       if next not in cost_so_far or new_cost < cost_so_far[next]:
-  //         cost_so_far[next] = new_cost
-  //         priority = new_cost + heuristic(goal, next)
-  //         frontier.put(next, priority)
-  //         came_from[next] = current
+  
+  cout << "Start planning: " << endl;
+  // convert coodinates: start and goal to GridLocation
+  GridLocation start = mapGraph.point2GridLoc(robot_loc_);
+  GridLocation goal = mapGraph.point2GridLoc(nav_goal_loc_);
+  cout << "robot_loc_: " << robot_loc_ << endl;
+  cout << "nav_goal_loc_: " << nav_goal_loc_ << endl;
+  cout << "start: " << start.x << " " << start.y << endl;
+  cout << "goal: " << goal.x << " " << goal.y << endl;
+  vector<GridLocation> grid_path;
+  mapGraph.aStarSearch(start, goal, grid_path);
+  // convert path to real coodinates
+  for (GridLocation pt : grid_path) {
+    path.push_back(mapGraph.gridLoc2point(pt));
+  }
+  cout << "path.size(): " << path.size() << endl;
+  
+  // Draw the path
+  for (auto pt : path) {
+    visualization::DrawCross(
+          pt,
+          CONFIG_grid_dx / 2.0,
+          0xe20502,
+          global_viz_msg_
+        );
+  }
 
 }
 
@@ -592,8 +692,7 @@ void Navigation::Run() {
   if (!odom_initialized_) return;
 
   // if (CheckNavComplete()) return;
-  vector<Eigen::Vector2f> pp;
-  GlobalPlanner(pp);
+  GlobalPlanner(pp); // TODO: should not be here
 
 
   // ObstacleAvoidance();

@@ -22,7 +22,7 @@
 #include <vector>
 #include <deque>
 #include <unordered_map>
-
+#include <queue>
 #include "eigen3/Eigen/Dense"
 
 #include "vector_map/vector_map.h"
@@ -72,16 +72,54 @@ struct GridLocation {
   int x;
   int y;
   GridLocation(int x,int y): x(x),y(y) {}
-
+  // Default constructor
+  GridLocation() : x(0), y(0) {}
+  
   GridLocation operator-(const GridLocation& other) {
-    GridLocation new_loc(
-      this->x - other.x,
-      this->y - other.y
-    );
-    return new_loc;
+      x = x - other.x;
+      y = y - other.y;
+      return *this;
+  }
+
+  bool operator==(const GridLocation& other) const {
+        return x == other.x && y == other.y;
+  }
+
+  bool operator!=(const GridLocation& other) const {
+      return !(*this == other);
+  }
+
+  // Comparison operator for < (This is dummy for PriorityQueue)
+  bool operator<(const GridLocation& other) const {
+      if (x < other.x)
+          return true;
+      if (x > other.x)
+          return false;
+      return y < other.y;
   }
 };
 
+// implement a Priority Queue with re-prioritize option 
+template<typename T, typename priority_t>
+struct PriorityQueue {
+  typedef std::pair<priority_t, T> PQElement;
+  std::priority_queue<PQElement, std::vector<PQElement>,
+                 std::greater<PQElement>> elements;
+
+  inline bool empty() const {
+     return elements.empty();
+  }
+
+  inline void put(T item, priority_t priority) {
+    elements.emplace(priority, item);
+  }
+
+  T get() {
+    T best_item = elements.top().second;
+    elements.pop();
+    return best_item;
+  }
+};
 class Navigation {
  public:
 
@@ -205,10 +243,27 @@ class MapGraph {
     // draw gridlines (dark blue), cross (dark blue) as obstacles
     void drawObstacleGrid();
     
-
+    // A* Search on a grid, return the found path
+    void aStarSearch(const GridLocation& start, 
+                          const GridLocation& goal, 
+                          vector<GridLocation>& path); 
+    
+    
   private:  
     // check if point _p is on line segment _p0->_p1
     bool pointOnLineSegment(const GridLocation& _p, const GridLocation& _p0, const GridLocation& _p1 );
+    // backtrack from goal to the start, reconstruct the path 
+    void backtrackPath(const GridLocation& start, 
+                        const GridLocation& goal, 
+                        std::map<GridLocation, GridLocation>& came_from,
+                        vector<GridLocation>& path); 
+    
+    double getEdgeCost(const GridLocation& p1, const GridLocation& p2);
+    
+    double getHeuristic(const GridLocation& p1, const GridLocation& p2);
+    
+    vector<GridLocation> getNeighbors(GridLocation current);
+    
     // true: obstacle, false: free
     vector<vector<bool>> obstacle_grid;
     int grid_num_x = 0;
@@ -217,13 +272,7 @@ class MapGraph {
     float map_min_x = 0;
     float map_max_y = 0;
     float map_min_y = 0;
-    
-  // vector<vector<int>>& graph;
-  // std::unordered_map<GridLocation, GridLocation> came_from;
-  // std::unordered_map<GridLocation, double> cost_so_far;
-
-  // void GenerateGraph();
-  // void AStarSearch();
+  
 
 };
 
