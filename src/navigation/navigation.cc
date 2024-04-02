@@ -58,10 +58,9 @@ const float kEpsilon = 1e-5;
 // Hyperparameters
 CONFIG_FLOAT(grid_dx, "grid_dx"); // dx for grid construction
 CONFIG_FLOAT(grid_dy, "grid_dy"); // dy for grid construction
-
-#define DIST_NAV_COMPLETE 0.5     // max distance to goal to be considered complete
-#define DIST_REPLAN 10            // min distance to intermediate goal to replan
-#define SCORE_GOAL 1              // weight for distance to goal
+CONFIG_FLOAT(dist_nav_complete, "dist_nav_complete"); // max distance to goal to be considered complete
+CONFIG_FLOAT(dist_replan, "dist_replan"); // min distance to intermediate goal to replan
+CONFIG_FLOAT(score_goal, "score_goal"); // weight for distance to goal
 
 namespace navigation {
 
@@ -128,6 +127,165 @@ void Navigation::ObservePointCloud(const vector<Vector2f>& cloud,
   point_cloud_ = cloud;                                     
 }
 
+void Navigation::drawCar(bool withMargin=true) {
+  // draw car (black)
+  float car_inner_y = CAR_WIDTH / 2.0;
+  float car_outter_y = -car_inner_y;
+  float car_front_x = (CAR_BASE + CAR_LENGTH) / 2.0;
+  float car_rear_x = -(CAR_LENGTH - CAR_BASE) / 2.0;
+
+  Vector2f car_inner_front_pt = Vector2f(car_front_x,car_inner_y);
+  Vector2f car_outter_front_pt = Vector2f(car_front_x,car_outter_y);
+  Vector2f car_inner_rear_pt = Vector2f(car_rear_x,car_inner_y);
+  Vector2f car_outter_rear_pt = Vector2f(car_rear_x,car_outter_y);
+
+  visualization::DrawLine(car_inner_front_pt,car_outter_front_pt,0, local_viz_msg_);
+  visualization::DrawLine(car_outter_rear_pt,car_outter_front_pt,0, local_viz_msg_);
+  visualization::DrawLine(car_inner_front_pt,car_inner_rear_pt,0, local_viz_msg_);
+  visualization::DrawLine(car_inner_rear_pt,car_outter_rear_pt,0, local_viz_msg_);
+
+  // draw margin (orange)
+  float car_inner_y_m = CAR_WIDTH / 2.0 + SAFETY_MARGIN;
+  float car_outter_y_m = -car_inner_y_m;
+  float car_front_x_m = (CAR_BASE + CAR_LENGTH) / 2.0 + SAFETY_MARGIN;
+  float car_rear_x_m = -(CAR_LENGTH - CAR_BASE) / 2.0 - SAFETY_MARGIN;
+
+  Vector2f car_inner_front_pt_m = Vector2f(car_front_x_m,car_inner_y_m);
+  Vector2f car_outter_front_pt_m = Vector2f(car_front_x_m,car_outter_y_m);
+  Vector2f car_inner_rear_pt_m = Vector2f(car_rear_x_m,car_inner_y_m);
+  Vector2f car_outter_rear_pt_m = Vector2f(car_rear_x_m,car_outter_y_m);
+
+  visualization::DrawLine(car_inner_front_pt_m,car_outter_front_pt_m,0xFFC116, local_viz_msg_);
+  visualization::DrawLine(car_outter_rear_pt_m,car_outter_front_pt_m,0xFFC116, local_viz_msg_);
+  visualization::DrawLine(car_inner_front_pt_m,car_inner_rear_pt_m,0xFFC116, local_viz_msg_);
+  visualization::DrawLine(car_inner_rear_pt_m,car_outter_rear_pt_m,0xFFC116, local_viz_msg_);
+
+
+}
+
+void Navigation::drawPointCloud() {
+  // olive color
+  for (auto point : point_cloud_) {
+    // visualization::DrawCross(point,0.01,0x808000,local_viz_msg_);
+    visualization::DrawPoint(point,0x808000,local_viz_msg_);
+	}
+}
+
+void Navigation::RunSineWave(float T) {
+
+  static float time_accum = 0;
+
+  // print <drive_msg.vel>,<odemtry_vel>
+
+  drive_msg_.curvature = 0;
+  drive_msg_.velocity = sin(2* M_PI/ T * time_accum);
+  time_accum += dt;
+  if (time_accum>T)
+    time_accum -= T;
+  
+  // std::cout<<drive_msg_.velocity<<","<<robot_vel_.norm()<<"\n";
+}
+
+float Navigation::LatencyCompensation(size_t queue_size) {
+  /*
+    1.  Take the previous sent controls (not applied yet) to
+        calculate where the car will be located and oriented at
+        after the controls are applied.
+
+    2.  Use the displacement and orientation change to compute a
+        coordinate transformation matrix. Then apply the inverse of
+        this matrix to the point cloud.
+
+    3.  Return the latest velocity in the control queue.
+  */
+
+  if (control_queue.size() < queue_size) {
+    return robot_vel_.norm();
+  }
+
+  // location and orientation w.r.t. original base_link
+  float x = 0.f, y = 0.f;
+  float theta = 0.f;
+
+  for (const auto &control : control_queue) {
+    if (std::abs(control.curvature) < 1E-3f) {
+      // straight line
+      x += control.velocity * std::cos(theta) * dt;
+      y += control.velocity * std::sin(theta) * dt;
+    } else {
+      // curve
+      float theta_prime = theta + control.velocity * control.curvature * dt;
+      x += (-std::sin(theta) + std::sin(theta_prime)) / control.curvature;
+      y += (std::cos(theta) - std::cos(theta_prime)) / control.curvature;
+      theta = theta_prime;
+    }
+  }
+  // cout << "forward-predict: (x', y', theta'): (" << x << ", " << y << ", " << theta << ')' << endl;
+
+  // rotation and translation matrix
+  Eigen::Matrix3f transform;
+  transform <<
+        std::cos(theta), -std::sin(theta), x * std::cos(theta) - y * std::sin(theta),
+        std::sin(theta), std::cos(theta), x * std::sin(theta) + y * std::cos(theta),
+        0.f, 0.f, 1.f;
+
+  // draw an example
+  // Eigen::Vector3f example_pt1(0,0,1);
+  // Eigen::Vector3f example_pt2(1,0,1);
+  // example_pt1 = transform * example_pt1;
+  // example_pt2 = transform * example_pt2;
+  // visualization::DrawLine(Vector2f(example_pt1.x(), example_pt1.y()), Vector2f(example_pt2.x(), example_pt2.y()), 0xEB4EED ,local_viz_msg_);
+
+  // Transform the lidar points using translation and rotation
+  for (auto& point : point_cloud_) {
+      // homogeneous coordinates
+      Eigen::Vector3f p(point.x(), point.y(), 1);
+      p = transform.inverse() * p;
+      point.x() = p.x() / p.z();
+      point.y() = p.y() / p.z();
+  }
+
+  // pop out the oldest control and return the lastest velocity
+  control_queue.pop_front();
+  return control_queue.back().velocity;
+}
+
+void Navigation::GenerateCurvatures(int num_samples = 100) {
+  if (num_samples % 2 == 0) {
+    num_samples += 1;
+  }
+  curvatures_.resize(num_samples);
+  // std::cout<<"Total samples="<<num_samples<<"\n";
+  // half of samples
+  num_samples = (num_samples - 1) / 2;
+  // std::cout<<"half samples="<<num_samples<<"\n";
+  float _delta = CAR_CMAX * 1.0 / num_samples;
+  // std::cout<<"delta="<<_delta<<"\n";
+  // straight line
+  curvatures_[0] = 0;
+  for (int i = 0; i < num_samples; ++i) {
+    curvatures_[i*2+1] = _delta*(i+1);
+    curvatures_[i*2+2] = -curvatures_[i*2+1];
+  }
+  return;
+}
+
+float Navigation::ComputeTOC(float free_path_length, float cur_velocity) {
+  // float velocity = robot_vel_.norm();
+  float velocity = cur_velocity;
+  float min_dist = velocity * velocity / (2 * max_acceleration);
+
+  if (free_path_length <= min_dist) {
+    return std::max(velocity - dt * max_acceleration, 0.f);
+  }
+
+  if (velocity < max_speed) {
+    return std::min(velocity + dt * max_acceleration, max_speed);
+  }
+
+  return max_speed;
+}
+
 float Navigation::ComputeClearance(float free_path_len, float curv) {
   float min_clearance = 10.0;
   float r = 1.0 / std::abs(curv);
@@ -184,52 +342,6 @@ float Navigation::ComputeClearance(float free_path_len, float curv) {
   }
   // cout << "============/=======\n";
   return min_clearance;
-}
-
-PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs, const Eigen::Vector2f &goal) {
- 
-  // PathOption return_path;
-
-  float highest_score = -1;
-  PathOption best_path;
-  float score_clearance = 0; // hyper-param
-  float score_curv = 0;
-  float score_goal = SCORE_GOAL;
-  for (auto _curv : candidate_curvs) {
-    // draw options (gray)
-    // visualization::DrawPathOption(_curv,1,5,0x808080,false,local_viz_msg_);
-
-    Eigen::Vector2f endpoint(-1, -1);
-    float free_path_len = ComputeFreePathLength(_curv, endpoint);
-    float clearance = ComputeClearance(free_path_len, _curv);
-    // float score = free_path_len + score_w * clearance - PENALTY_CURVE * std::abs(_curv);
-    // visualization::DrawPathOption(_curv, free_path_len, clearance, 0xFF0000, false, local_viz_msg_);
-    float score = free_path_len + 
-                  score_clearance * clearance +
-                  score_curv * std::abs(_curv) +
-                  score_goal * (goal - endpoint).norm();
-    if (score > highest_score) {
-      highest_score = score;
-      best_path.curvature = _curv;
-      best_path.clearance = clearance;
-      best_path.free_path_length = free_path_len;
-    }
-  }
-
-  //std::cout<<"Score "<<highest_score<<"\n";
-  // draw best option (blue)
-  // visualization::DrawPathOption(best_path.curvature,best_path.free_path_length,best_path.clearance,0x0F03FC,false,local_viz_msg_);
-  std::cout<<"Best C="<<best_path.curvature<<" Free Path Length="<<best_path.free_path_length<<"\n";
-  
-  // just for an example
-  // return_path.curvature = best_curv;
-  // return_path.clearance = 1.4;
-  // return_path.free_path_length = best_option;
-  // return_path.obstruction = Vector2f(0,0)
-  // return_path.closest_point = Vector2f(0,0);
-
-  return best_path;
-    
 }
 
 float Navigation::ComputeFreePathLength(float curvature, Eigen::Vector2f &endpoint) {
@@ -330,6 +442,52 @@ float Navigation::ComputeFreePathLength(float curvature, Eigen::Vector2f &endpoi
 
 }
 
+PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs, const Eigen::Vector2f &goal) {
+ 
+  // PathOption return_path;
+
+  float highest_score = -1;
+  PathOption best_path;
+  float score_clearance = 0; // hyper-param
+  float score_curv = 0;
+  float score_goal = SCORE_GOAL;
+  for (auto _curv : candidate_curvs) {
+    // draw options (gray)
+    // visualization::DrawPathOption(_curv,1,5,0x808080,false,local_viz_msg_);
+
+    Eigen::Vector2f endpoint(-1, -1);
+    float free_path_len = ComputeFreePathLength(_curv, endpoint);
+    float clearance = ComputeClearance(free_path_len, _curv);
+    // float score = free_path_len + score_w * clearance - PENALTY_CURVE * std::abs(_curv);
+    // visualization::DrawPathOption(_curv, free_path_len, clearance, 0xFF0000, false, local_viz_msg_);
+    float score = free_path_len + 
+                  score_clearance * clearance +
+                  score_curv * std::abs(_curv) +
+                  score_goal * (goal - endpoint).norm();
+    if (score > highest_score) {
+      highest_score = score;
+      best_path.curvature = _curv;
+      best_path.clearance = clearance;
+      best_path.free_path_length = free_path_len;
+    }
+  }
+
+  //std::cout<<"Score "<<highest_score<<"\n";
+  // draw best option (blue)
+  // visualization::DrawPathOption(best_path.curvature,best_path.free_path_length,best_path.clearance,0x0F03FC,false,local_viz_msg_);
+  std::cout<<"Best C="<<best_path.curvature<<" Free Path Length="<<best_path.free_path_length<<"\n";
+  
+  // just for an example
+  // return_path.curvature = best_curv;
+  // return_path.clearance = 1.4;
+  // return_path.free_path_length = best_option;
+  // return_path.obstruction = Vector2f(0,0)
+  // return_path.closest_point = Vector2f(0,0);
+
+  return best_path;
+    
+}
+
 void Navigation::ObstacleAvoidance() {
   static Eigen::Vector2f intermediate_goal(-1, -1);
   LocalPlanner(intermediate_goal);
@@ -362,305 +520,6 @@ void Navigation::ObstacleAvoidance() {
   control_queue.push_back(latest_control);
 }
 
-void Navigation::GenerateCurvatures(int num_samples = 100) {
-  if (num_samples % 2 == 0) {
-    num_samples += 1;
-  }
-  curvatures_.resize(num_samples);
-  std::cout<<"Total samples="<<num_samples<<"\n";
-  // half of samples
-  num_samples = (num_samples - 1) / 2;
-  std::cout<<"half samples="<<num_samples<<"\n";
-  float _delta = CAR_CMAX * 1.0 / num_samples;
-  std::cout<<"delta="<<_delta<<"\n";
-  // straight line
-  curvatures_[0] = 0;
-  for (int i = 0; i < num_samples; ++i) {
-    curvatures_[i*2+1] = _delta*(i+1);
-    curvatures_[i*2+2] = -curvatures_[i*2+1];
-  }
-  return;
-}
-
-float Navigation::ComputeTOC(float free_path_length, float cur_velocity) {
-  // float velocity = robot_vel_.norm();
-  float velocity = cur_velocity;
-  float min_dist = velocity * velocity / (2 * max_acceleration);
-
-  if (free_path_length <= min_dist) {
-    return std::max(velocity - dt * max_acceleration, 0.f);
-  }
-
-  if (velocity < max_speed) {
-    return std::min(velocity + dt * max_acceleration, max_speed);
-  }
-
-  return max_speed;
-}
-
-void Navigation::drawCar(bool withMargin=true) {
-  // draw car (black)
-  float car_inner_y = CAR_WIDTH / 2.0;
-  float car_outter_y = -car_inner_y;
-  float car_front_x = (CAR_BASE + CAR_LENGTH) / 2.0;
-  float car_rear_x = -(CAR_LENGTH - CAR_BASE) / 2.0;
-
-  Vector2f car_inner_front_pt = Vector2f(car_front_x,car_inner_y);
-  Vector2f car_outter_front_pt = Vector2f(car_front_x,car_outter_y);
-  Vector2f car_inner_rear_pt = Vector2f(car_rear_x,car_inner_y);
-  Vector2f car_outter_rear_pt = Vector2f(car_rear_x,car_outter_y);
-
-  visualization::DrawLine(car_inner_front_pt,car_outter_front_pt,0, local_viz_msg_);
-  visualization::DrawLine(car_outter_rear_pt,car_outter_front_pt,0, local_viz_msg_);
-  visualization::DrawLine(car_inner_front_pt,car_inner_rear_pt,0, local_viz_msg_);
-  visualization::DrawLine(car_inner_rear_pt,car_outter_rear_pt,0, local_viz_msg_);
-
-  // draw margin (orange)
-  float car_inner_y_m = CAR_WIDTH / 2.0 + SAFETY_MARGIN;
-  float car_outter_y_m = -car_inner_y_m;
-  float car_front_x_m = (CAR_BASE + CAR_LENGTH) / 2.0 + SAFETY_MARGIN;
-  float car_rear_x_m = -(CAR_LENGTH - CAR_BASE) / 2.0 - SAFETY_MARGIN;
-
-  Vector2f car_inner_front_pt_m = Vector2f(car_front_x_m,car_inner_y_m);
-  Vector2f car_outter_front_pt_m = Vector2f(car_front_x_m,car_outter_y_m);
-  Vector2f car_inner_rear_pt_m = Vector2f(car_rear_x_m,car_inner_y_m);
-  Vector2f car_outter_rear_pt_m = Vector2f(car_rear_x_m,car_outter_y_m);
-
-  visualization::DrawLine(car_inner_front_pt_m,car_outter_front_pt_m,0xFFC116, local_viz_msg_);
-  visualization::DrawLine(car_outter_rear_pt_m,car_outter_front_pt_m,0xFFC116, local_viz_msg_);
-  visualization::DrawLine(car_inner_front_pt_m,car_inner_rear_pt_m,0xFFC116, local_viz_msg_);
-  visualization::DrawLine(car_inner_rear_pt_m,car_outter_rear_pt_m,0xFFC116, local_viz_msg_);
-
-
-}
-
-void Navigation::drawPointCloud() {
-  // olive color
-  for (auto point : point_cloud_) {
-    // visualization::DrawCross(point,0.01,0x808000,local_viz_msg_);
-    visualization::DrawPoint(point,0x808000,local_viz_msg_);
-	}
-}
-
-void Navigation::RunSineWave(float T) {
-
-  static float time_accum = 0;
-
-  // print <drive_msg.vel>,<odemtry_vel>
-
-  drive_msg_.curvature = 0;
-  drive_msg_.velocity = sin(2* M_PI/ T * time_accum);
-  time_accum += dt;
-  if (time_accum>T)
-    time_accum -= T;
-  
-  std::cout<<drive_msg_.velocity<<","<<robot_vel_.norm()<<"\n";
-}
-
-float Navigation::LatencyCompensation(size_t queue_size) {
-  /*
-    1.  Take the previous sent controls (not applied yet) to
-        calculate where the car will be located and oriented at
-        after the controls are applied.
-
-    2.  Use the displacement and orientation change to compute a
-        coordinate transformation matrix. Then apply the inverse of
-        this matrix to the point cloud.
-
-    3.  Return the latest velocity in the control queue.
-  */
-
-  if (control_queue.size() < queue_size) {
-    return robot_vel_.norm();
-  }
-
-  // location and orientation w.r.t. original base_link
-  float x = 0.f, y = 0.f;
-  float theta = 0.f;
-
-  for (const auto &control : control_queue) {
-    if (std::abs(control.curvature) < 1E-3f) {
-      // straight line
-      x += control.velocity * std::cos(theta) * dt;
-      y += control.velocity * std::sin(theta) * dt;
-    } else {
-      // curve
-      float theta_prime = theta + control.velocity * control.curvature * dt;
-      x += (-std::sin(theta) + std::sin(theta_prime)) / control.curvature;
-      y += (std::cos(theta) - std::cos(theta_prime)) / control.curvature;
-      theta = theta_prime;
-    }
-  }
-  cout << "forward-predict: (x', y', theta'): (" << x << ", " << y << ", " << theta << ')' << endl;
-
-  // rotation and translation matrix
-  Eigen::Matrix3f transform;
-  transform <<
-        std::cos(theta), -std::sin(theta), x * std::cos(theta) - y * std::sin(theta),
-        std::sin(theta), std::cos(theta), x * std::sin(theta) + y * std::cos(theta),
-        0.f, 0.f, 1.f;
-
-  // draw an example
-  // Eigen::Vector3f example_pt1(0,0,1);
-  // Eigen::Vector3f example_pt2(1,0,1);
-  // example_pt1 = transform * example_pt1;
-  // example_pt2 = transform * example_pt2;
-  // visualization::DrawLine(Vector2f(example_pt1.x(), example_pt1.y()), Vector2f(example_pt2.x(), example_pt2.y()), 0xEB4EED ,local_viz_msg_);
-
-  // Transform the lidar points using translation and rotation
-  for (auto& point : point_cloud_) {
-      // homogeneous coordinates
-      Eigen::Vector3f p(point.x(), point.y(), 1);
-      p = transform.inverse() * p;
-      point.x() = p.x() / p.z();
-      point.y() = p.y() / p.z();
-  }
-
-  // pop out the oldest control and return the lastest velocity
-  control_queue.pop_front();
-  return control_queue.back().velocity;
-}
-void MapGraph::backtrackPath(const GridLocation& start, 
-                        const GridLocation& goal, 
-                        std::map<GridLocation, GridLocation>& came_from,
-                        vector<GridLocation>& path) 
-{
-
-  
-  GridLocation current(goal.x, goal.y);
-  if (came_from.find(goal) == came_from.end()) {
-    return; // no path can be found
-  }
-  while (current != start) {
-    path.push_back(current);
-    GridLocation temp;
-    temp.x = came_from[current].x;
-    temp.y = came_from[current].y;
-    current.x = temp.x;
-    current.y = temp.y;
-  }
-  path.push_back(start); // optional
-  std::reverse(path.begin(), path.end());
-
-}
-
-double MapGraph::getEdgeCost(const GridLocation& p1, const GridLocation& p2) {
-  // Calculate the difference between x and y coordinates
-  float dx = (p2.x - p1.x) * 1.0;
-  float dy = (p2.y - p1.y) * 1.0;
-
-  // Calculate the L2 norm (Euclidean distance)
-  double distance = std::sqrt(dx * dx + dy * dy);
-
-  return distance;
-}
-double MapGraph::getHeuristic(const GridLocation& p1, const GridLocation& p2) {
-  // Calculate the difference between x and y coordinates
-  float dx = (p2.x - p1.x) * 1.0;
-  float dy = (p2.y - p1.y) * 1.0;
-
-  // Calculate the L2 norm (Euclidean distance)
-  double distance = std::sqrt(dx * dx + dy * dy);
-
-  return distance;
-}
-
-vector<GridLocation> MapGraph::getNeighbors(const GridLocation current) {
-  vector<vector<int>> DIRS = {{0, 1}, {0, -1}, {1, 1}, {1, 0}, {1, -1}, {-1, 1}, {-1, 0}, {-1, -1}};
-  vector<GridLocation> neighbors;
-
-  int grid_h = obstacle_grid.size();
-  int grid_w = obstacle_grid[0].size();
-
-  for (auto dir : DIRS) {
-    GridLocation neighbor(current.x + dir[0], current.y + dir[1]);
-    if (neighbor.x >= 0 && neighbor.x < grid_h && neighbor.y >= 0 
-        && neighbor.y < grid_w && !obstacle_grid[neighbor.x][neighbor.y]) {
-          neighbors.push_back(neighbor);
-    }
-  }
-
-  return neighbors;
-
-}
-
-void MapGraph::aStarSearch(const GridLocation& start, 
-                          const GridLocation& goal, 
-                          vector<GridLocation>& path) 
-{
-    std::map<GridLocation, GridLocation> came_from;
-    std::map<GridLocation, double> cost_so_far;
-
-    // PriorityQueue<GridLocation, double> frontier;
-    std::priority_queue<std::pair<double, GridLocation>, vector<std::pair<double, GridLocation>>, std::greater<std::pair<double, GridLocation>>> frontier;
-    frontier.push({0, start});
-    came_from[start] = start;
-    cost_so_far[start] = 0;
-  
-    while (!frontier.empty()) {
-      GridLocation current = frontier.top().second;
-      frontier.pop();
-      // cout << "current: " << current.x << " " << current.y << endl;
-      // cout << "start: " << start.x << " " << start.y << endl;
-      // cout << "goal: " << goal.x << " " << goal.y << endl;
-      if (current == goal) break;
-
-      for (GridLocation next : getNeighbors(current)) {
-        double new_cost = cost_so_far[current] + getEdgeCost(current, next);
-        if (cost_so_far.find(next) == cost_so_far.end()
-            || new_cost < cost_so_far[next]) {
-          // cout << "next: " << next.x << " " << next.y << endl;
-          cost_so_far[next] = new_cost;
-          double priority = new_cost + getHeuristic(next, goal);
-          frontier.push({priority, next});
-          // frontier.put(next, priority);
-          came_from[next] = current;
-        }
-      }
-    }
-
-    backtrackPath(start, goal, came_from, path);
-
-
-
-}
-vector<Eigen::Vector2f> pp;
-
-// void Navigation::GlobalPlanner(vector<Position> &path) {
-void Navigation::GlobalPlanner(vector<Eigen::Vector2f> &path) {
-  static MapGraph mapGraph(map_);
-  mapGraph.drawObstacleGrid();
-  // nav goal: nav_goal_loc_, nav_goal_angle_
-  // robot_loc_: robot_loc_, robot_angle_
-  
-  cout << "Start planning: " << endl;
-  // convert coodinates: start and goal to GridLocation
-  GridLocation start = mapGraph.point2GridLoc(robot_loc_);
-  GridLocation goal = mapGraph.point2GridLoc(nav_goal_loc_);
-  cout << "robot_loc_: " << robot_loc_ << endl;
-  cout << "nav_goal_loc_: " << nav_goal_loc_ << endl;
-  cout << "start: " << start.x << " " << start.y << endl;
-  cout << "goal: " << goal.x << " " << goal.y << endl;
-  vector<GridLocation> grid_path;
-  mapGraph.aStarSearch(start, goal, grid_path);
-  // convert path to real coodinates
-  for (GridLocation pt : grid_path) {
-    path.push_back(mapGraph.gridLoc2point(pt));
-  }
-  cout << "path.size(): " << path.size() << endl;
-  
-  // Draw the path
-  for (auto pt : path) {
-    visualization::DrawCross(
-          pt,
-          CONFIG_grid_dx / 2.0,
-          0xe20502,
-          global_viz_msg_
-        );
-  }
-
-}
-
 void Navigation::LocalPlanner(Eigen::Vector2f &goal) {
   static vector<Eigen::Vector2f> path;
 
@@ -677,7 +536,7 @@ bool Navigation::CheckNavComplete() {
   if (nav_complete_) {
     return true;
   }
-  nav_complete_ = (robot_loc_ - nav_goal_loc_).norm() < DIST_NAV_COMPLETE;
+  nav_complete_ = (robot_loc_ - nav_goal_loc_).norm() < CONFIG_dist_nav_complete;
   return nav_complete_;
 }
 
@@ -707,11 +566,46 @@ void Navigation::Run() {
   drive_pub_.publish(drive_msg_);
 }
 
+void Navigation::GlobalPlanner(vector<Eigen::Vector2f> &path) {
+  static MapGraph mapGraph(map_);
+  // mapGraph.drawObstacleGrid();
+  // nav goal: nav_goal_loc_, nav_goal_angle_
+  // robot_loc_: robot_loc_, robot_angle_
+  
+  // cout << "Start planning: " << endl;
+  // convert coodinates: start and goal to GridLocation
+  GridLocation start = mapGraph.point2GridLoc(robot_loc_);
+  GridLocation goal = mapGraph.point2GridLoc(nav_goal_loc_);
+  // cout << "robot_loc_: " << robot_loc_ << endl;
+  // cout << "nav_goal_loc_: " << nav_goal_loc_ << endl;
+  // cout << "start: " << start.x << " " << start.y << endl;
+  // cout << "goal: " << goal.x << " " << goal.y << endl;
+  vector<GridLocation> grid_path;
+  mapGraph.aStarSearch(start, goal, grid_path);
+  // convert path to real coodinates
+  path.clear();
+  for (GridLocation pt : grid_path) {
+    path.push_back(mapGraph.gridLoc2point(pt));
+  }
+  // cout << "path.size(): " << path.size() << endl;
+  
+  // Draw the path
+  for (auto pt : path) {
+    visualization::DrawCross(
+          pt,
+          CONFIG_grid_dx / 2.0,
+          0xe20502,
+          global_viz_msg_
+        );
+  }
+
+}
+
 MapGraph::MapGraph(const vector_map::VectorMap& map_) {
   // initilize graph
-  cout<<"Initialize Grid:"<<endl;
-  cout<<"CONFIG_grid_dx: "<<CONFIG_grid_dx<<endl;
-  cout<<"CONFIG_grid_dy: "<<CONFIG_grid_dy<<endl;
+  // cout<<"Initialize Grid:"<<endl;
+  // cout<<"CONFIG_grid_dx: "<<CONFIG_grid_dx<<endl;
+  // cout<<"CONFIG_grid_dy: "<<CONFIG_grid_dy<<endl;
 
   // get bounradies of the map
   for (size_t i = 0; i < map_.lines.size(); ++i) {
@@ -730,10 +624,10 @@ MapGraph::MapGraph(const vector_map::VectorMap& map_) {
 
   }
 
-  cout<<"map_max_x="<<this->map_max_x<<endl;
-  cout<<"map_min_x="<<this->map_min_x<<endl;
-  cout<<"map_max_y="<<this->map_max_y<<endl;
-  cout<<"map_min_y="<<this->map_min_y<<endl;
+  // cout<<"map_max_x="<<this->map_max_x<<endl;
+  // cout<<"map_min_x="<<this->map_min_x<<endl;
+  // cout<<"map_max_y="<<this->map_max_y<<endl;
+  // cout<<"map_min_y="<<this->map_min_y<<endl;
 
   // initialize obstacle_grid
   obstacle_grid.clear();
@@ -743,8 +637,8 @@ MapGraph::MapGraph(const vector_map::VectorMap& map_) {
   grid_num_x = std::round( (map_max_x - map_min_x) / CONFIG_grid_dx );
   grid_num_y = std::round( (map_max_y - map_min_y) / CONFIG_grid_dy );
 
-  cout<<"grid width(x)="<<grid_num_x<<endl;
-  cout<<"grid height(y)="<<grid_num_y<<endl;
+  // cout<<"grid width(x)="<<grid_num_x<<endl;
+  // cout<<"grid height(y)="<<grid_num_y<<endl;
 
   obstacle_grid.resize(grid_num_x);
   for (int i = 0; i < grid_num_x; ++i) {
@@ -836,6 +730,109 @@ bool MapGraph::pointOnLineSegment(const GridLocation& _p, const GridLocation& _p
   } else {
     return false;
   }
+}
+
+void MapGraph::backtrackPath(const GridLocation& start, 
+                        const GridLocation& goal, 
+                        std::map<GridLocation, GridLocation>& came_from,
+                        vector<GridLocation>& path) 
+{
+
+  
+  GridLocation current(goal.x, goal.y);
+  if (came_from.find(goal) == came_from.end()) {
+    return; // no path can be found
+  }
+  while (current != start) {
+    path.push_back(current);
+    GridLocation temp;
+    temp.x = came_from[current].x;
+    temp.y = came_from[current].y;
+    current.x = temp.x;
+    current.y = temp.y;
+  }
+  path.push_back(start); // optional
+  std::reverse(path.begin(), path.end());
+
+}
+
+double MapGraph::getEdgeCost(const GridLocation& p1, const GridLocation& p2) {
+  // Calculate the difference between x and y coordinates
+  float dx = (p2.x - p1.x) * 1.0;
+  float dy = (p2.y - p1.y) * 1.0;
+
+  // Calculate the L2 norm (Euclidean distance)
+  double distance = std::sqrt(dx * dx + dy * dy);
+
+  return distance;
+}
+
+double MapGraph::getHeuristic(const GridLocation& p1, const GridLocation& p2) {
+  // Calculate the difference between x and y coordinates
+  float dx = (p2.x - p1.x) * 1.0;
+  float dy = (p2.y - p1.y) * 1.0;
+
+  // Calculate the L2 norm (Euclidean distance)
+  double distance = std::sqrt(dx * dx + dy * dy);
+
+  return distance;
+}
+
+vector<GridLocation> MapGraph::getNeighbors(const GridLocation current) {
+  vector<vector<int>> DIRS = {{0, 1}, {0, -1}, {1, 1}, {1, 0}, {1, -1}, {-1, 1}, {-1, 0}, {-1, -1}};
+  vector<GridLocation> neighbors;
+
+  int grid_h = obstacle_grid.size();
+  int grid_w = obstacle_grid[0].size();
+
+  for (auto dir : DIRS) {
+    GridLocation neighbor(current.x + dir[0], current.y + dir[1]);
+    if (neighbor.x >= 0 && neighbor.x < grid_h && neighbor.y >= 0 
+        && neighbor.y < grid_w && !obstacle_grid[neighbor.x][neighbor.y]) {
+          neighbors.push_back(neighbor);
+    }
+  }
+
+  return neighbors;
+
+}
+
+void MapGraph::aStarSearch(const GridLocation& start, 
+                          const GridLocation& goal, 
+                          vector<GridLocation>& path) 
+{
+    std::map<GridLocation, GridLocation> came_from;
+    std::map<GridLocation, double> cost_so_far;
+
+    // PriorityQueue<GridLocation, double> frontier;
+    std::priority_queue<std::pair<double, GridLocation>, vector<std::pair<double, GridLocation>>, std::greater<std::pair<double, GridLocation>>> frontier;
+    frontier.push({0, start});
+    came_from[start] = start;
+    cost_so_far[start] = 0;
+  
+    while (!frontier.empty()) {
+      GridLocation current = frontier.top().second;
+      frontier.pop();
+      // cout << "current: " << current.x << " " << current.y << endl;
+      // cout << "start: " << start.x << " " << start.y << endl;
+      // cout << "goal: " << goal.x << " " << goal.y << endl;
+      if (current == goal) break;
+
+      for (GridLocation next : getNeighbors(current)) {
+        double new_cost = cost_so_far[current] + getEdgeCost(current, next);
+        if (cost_so_far.find(next) == cost_so_far.end()
+            || new_cost < cost_so_far[next]) {
+          // cout << "next: " << next.x << " " << next.y << endl;
+          cost_so_far[next] = new_cost;
+          double priority = new_cost + getHeuristic(next, goal);
+          frontier.push({priority, next});
+          // frontier.put(next, priority);
+          came_from[next] = current;
+        }
+      }
+    }
+
+    backtrackPath(start, goal, came_from, path);
 }
 
 }  // namespace navigation

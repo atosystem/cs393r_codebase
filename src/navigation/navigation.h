@@ -120,6 +120,7 @@ struct PriorityQueue {
     return best_item;
   }
 };
+
 class Navigation {
  public:
 
