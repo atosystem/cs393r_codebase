@@ -149,7 +149,7 @@ class Navigation {
 
   PathOption ChoosePath(const vector<float> &candidate_curvs, const Eigen::Vector2f &goal);
 
-  float ComputeFreePathLength(float curvature, Eigen::Vector2f &endpoint);
+  float ComputeFreePathLength(float curvature, const Eigen::Vector2f &goal, Eigen::Vector2f &endpoint, float &distance_to_goal);
 
   float ComputeClearance(float free_path_len, float curv);
  

@@ -208,7 +208,7 @@ float Navigation::LatencyCompensation(size_t queue_size) {
   float theta = 0.f;
 
   for (const auto &control : control_queue) {
-    if (std::abs(control.curvature) < 1E-3f) {
+    if (std::fabs(control.curvature) < 1E-3f) {
       // straight line
       x += control.velocity * std::cos(theta) * dt;
       y += control.velocity * std::sin(theta) * dt;
@@ -288,7 +288,7 @@ float Navigation::ComputeTOC(float free_path_length, float cur_velocity) {
 
 float Navigation::ComputeClearance(float free_path_len, float curv) {
   float min_clearance = 10.0;
-  float r = 1.0 / std::abs(curv);
+  float r = 1.0 / std::fabs(curv);
   float turning_angle = free_path_len / r; // len = r * turning_angle
   float c_max = 3;
 
@@ -306,12 +306,12 @@ float Navigation::ComputeClearance(float free_path_len, float curv) {
   if (curv == 0) {    // straight line
     for (auto point : point_cloud_) {
       // filter out large clearance
-      if (std::abs(point.y()) > c_max) continue;
+      if (std::fabs(point.y()) > c_max) continue;
       // filter out collision points
       if (point.y() <= car_inner_y && point.y() >= car_outter_y && point.x() >= car_front_x) {
         continue;
       }
-      float cur_clearance = std::abs(point.y());
+      float cur_clearance = std::fabs(point.y());
       min_clearance = std::min(min_clearance,cur_clearance);
     }
 
@@ -329,10 +329,10 @@ float Navigation::ComputeClearance(float free_path_len, float curv) {
       // filter out collision 
       if (r_min <= r_p && r_p <= r_max) continue;
       // filter out far point
-      if (std::abs(r_p - r) > c_max || p_angle < 0 || p_angle > turning_angle) { // TODO: condition on turning_angle is an assumption
+      if (std::fabs(r_p - r) > c_max || p_angle < 0 || p_angle > turning_angle) { // TODO: condition on turning_angle is an assumption
         continue;
       }
-      cur_clearance = std::abs(r_p - r); // |c-p| - rmax
+      cur_clearance = std::fabs(r_p - r); // |c-p| - rmax
       // cout << "curv, x, clearance: " << curv << ", " << point.x() << ", " << cur_clearance << endl;
       // if (cur_clearance < min_clearance) {
       //     // cout << "min_clearance, x, r_p: " << min_clearance << ", " << point.x() << ", " << r_p << endl;
@@ -443,38 +443,79 @@ float Navigation::ComputeFreePathLength(float curvature, Eigen::Vector2f &endpoi
 }
 
 PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs, const Eigen::Vector2f &goal) {
- 
-  // PathOption return_path;
+  // convert goal from map coordinate to base link
+  Eigen::Matrix3f map_to_base_link;
+  map_to_base_link << 
+    std::cos(robot_angle_), -std::sin(robot_angle_), robot_loc_.x(),
+    std::sin(robot_angle_),  std::cos(robot_angle_), robot_loc_.y(),
+    0.f, 0.f, 1.f;
+  map_to_base_link = map_to_base_link.inverse();
+  Eigen::Vector3f p(goal.x(), goal.y(), 1.f);
+  p = map_to_base_link * p;
+  const Vector2f goal_base_link(p.x() / p.z(), p.y() / p.z());
 
-  float highest_score = -1;
+  float highest_score = -std::numeric_limits<float>::infinity();
   PathOption best_path;
   float score_clearance = 0; // hyper-param
   float score_curv = 0;
-  float score_goal = SCORE_GOAL;
+  float score_goal = CONFIG_score_goal;
+  Vector2f selected_endpoint;
   for (auto _curv : candidate_curvs) {
-    // draw options (gray)
-    // visualization::DrawPathOption(_curv,1,5,0x808080,false,local_viz_msg_);
-
-    Eigen::Vector2f endpoint(-1, -1);
-    float free_path_len = ComputeFreePathLength(_curv, endpoint);
+    Vector2f endpoint;
+    float distance_to_goal = -1;
+    float free_path_len = ComputeFreePathLength(_curv, goal_base_link, endpoint, distance_to_goal);
     float clearance = ComputeClearance(free_path_len, _curv);
-    // float score = free_path_len + score_w * clearance - PENALTY_CURVE * std::abs(_curv);
-    // visualization::DrawPathOption(_curv, free_path_len, clearance, 0xFF0000, false, local_viz_msg_);
+    // draw options (gray)
+    visualization::DrawCross(
+      endpoint,
+      CONFIG_grid_dx / 2.0,
+      0x808080,
+      local_viz_msg_
+    );
+    visualization::DrawPathOption(
+      _curv,
+      free_path_len,
+      clearance,
+      0x808080,
+      false,
+      local_viz_msg_
+    );
+
     float score = free_path_len + 
                   score_clearance * clearance +
-                  score_curv * std::abs(_curv) +
-                  score_goal * (goal - endpoint).norm();
+                  score_curv * std::fabs(_curv) +
+                  score_goal * distance_to_goal;
+
+    cout << "=== curvature: " << _curv << " ===" << endl;
+    cout << "score: " << score << endl;
+    cout << "free_path_len: " << free_path_len << endl;
+    cout << "dist(endpoint, goal): " << distance_to_goal << " * " << score_goal << " = " << score_goal * distance_to_goal << "\n" << endl;
+
     if (score > highest_score) {
       highest_score = score;
       best_path.curvature = _curv;
       best_path.clearance = clearance;
       best_path.free_path_length = free_path_len;
+      selected_endpoint = endpoint;
     }
   }
 
   //std::cout<<"Score "<<highest_score<<"\n";
   // draw best option (blue)
-  // visualization::DrawPathOption(best_path.curvature,best_path.free_path_length,best_path.clearance,0x0F03FC,false,local_viz_msg_);
+  visualization::DrawCross(
+    selected_endpoint,
+    CONFIG_grid_dx / 2.0,
+    0x0F03FC,
+    local_viz_msg_
+  );
+  visualization::DrawPathOption(
+    best_path.curvature,
+    best_path.free_path_length,
+    best_path.clearance,
+    0x0F03FC,
+    false,
+    local_viz_msg_
+  );
   std::cout<<"Best C="<<best_path.curvature<<" Free Path Length="<<best_path.free_path_length<<"\n";
   
   // just for an example
@@ -488,11 +529,66 @@ PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs, const Ei
     
 }
 
+void Navigation::LocalPlanner(Eigen::Vector2f &intermediate_goal) {
+  static vector<Eigen::Vector2f> path;
+  static int index = 0;
+
+  // check if we need to replan
+  if (path.size() == 0 || (robot_loc_ - intermediate_goal).norm() > CONFIG_dist_replan) {
+    GlobalPlanner(path);
+    index = 0;
+  }
+
+  // draw remaining path (red)
+  for (size_t i = index; i < path.size(); ++i) {
+    visualization::DrawCross(
+          path[i],
+          CONFIG_grid_dx / 2.0,
+          0xe20502,
+          global_viz_msg_
+        );
+  }
+
+  // run through the path and find the farthest valid point
+  for (size_t i = index; i < path.size(); ++i) {
+    Eigen::Vector2f pt = path[i];
+    geometry::line2f line(robot_loc_, pt);
+    bool collision = false;
+    for (const auto& map_line : map_.lines) {
+      if (map_line.Intersects(line)) {
+        collision = true;
+        break;
+      }
+    }
+    if (collision) {
+      break;
+    }
+    index = i;
+  }
+  intermediate_goal = path[index];
+}
+
 void Navigation::ObstacleAvoidance() {
   static Eigen::Vector2f intermediate_goal(-1, -1);
   LocalPlanner(intermediate_goal);
 
-  float cur_velocity = LatencyCompensation();
+  // intermediate goal (black)
+  visualization::DrawCross(
+    intermediate_goal,
+    CONFIG_grid_dx / 2.0,
+    0x000000,
+    global_viz_msg_
+  );
+  visualization::DrawArc(
+    intermediate_goal,
+    CONFIG_dist_replan,
+    0,
+    360,
+    0x00000,
+    global_viz_msg_
+  );
+
+  float cur_velocity = robot_vel_.norm(); // LatencyCompensation();
 
   // 1. Generate possible curvatures (kinemetic constraint)
   int num_samples = 10; // ?
@@ -520,18 +616,6 @@ void Navigation::ObstacleAvoidance() {
   control_queue.push_back(latest_control);
 }
 
-void Navigation::LocalPlanner(Eigen::Vector2f &goal) {
-  static vector<Eigen::Vector2f> path;
-
-  // // check if we need to replan
-  // if (goal == Position(-1, -1) || (robot_loc_ - goal).norm() > DIST_REPLAN) {
-  //   GlobalPlanner(path);
-  // }
-
-  // // TODO: run through the path and find the farthest valid point
-  // goal = path[0];
-}
-
 bool Navigation::CheckNavComplete() {
   if (nav_complete_) {
     return true;
@@ -550,11 +634,28 @@ void Navigation::Run() {
   // If odometry has not been initialized, we can't do anything.
   if (!odom_initialized_) return;
 
-  // if (CheckNavComplete()) return;
-  GlobalPlanner(pp); // TODO: should not be here
+  if (CheckNavComplete()) return;
 
+  // draw car
+  drawCar();
 
-  // ObstacleAvoidance();
+  // draw nav goal (violet)
+  visualization::DrawCross(
+    nav_goal_loc_,
+    CONFIG_grid_dx / 2.0,
+    0x9400d3,
+    global_viz_msg_
+  );
+  visualization::DrawArc(
+    nav_goal_loc_,
+    CONFIG_dist_nav_complete,
+    0,
+    360,
+    0x9400d3,
+    global_viz_msg_
+  );
+
+  ObstacleAvoidance();
 
   // Add timestamps to all messages.
   local_viz_msg_.header.stamp = ros::Time::now();
