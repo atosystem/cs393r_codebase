@@ -149,7 +149,7 @@ class Navigation {
 
   PathOption ChoosePath(const vector<float> &candidate_curvs, const Eigen::Vector2f &goal);
 
-  float ComputeFreePathLength(float curvature, const Eigen::Vector2f &goal, Eigen::Vector2f &endpoint, float &distance_to_goal);
+  float ComputeFreePathLength(float curvature, const Eigen::Vector2f &goal, Eigen::Vector2f &endpoint);
 
   float ComputeClearance(float free_path_len, float curv);
  
@@ -167,7 +167,7 @@ class Navigation {
   // navigation
   void GlobalPlanner(vector<Eigen::Vector2f> &path);
 
-  void LocalPlanner(Eigen::Vector2f &goal);
+  void LocalPlanner();
 
   bool CheckNavComplete();
 
@@ -218,12 +218,14 @@ class Navigation {
 
   // Configuration
   static constexpr float dt = 0.05f;
-  static constexpr float max_speed = 1.0f;
+  static constexpr float max_speed = 0.5f;
   static constexpr float max_curvature = 1.f / 0.98f;
   static constexpr float max_acceleration = 4.f;
   
   // Control queue for latency compensation
   std::deque<Control> control_queue;
+
+  Eigen::Vector2f intermediate_goal;
 
 };
 

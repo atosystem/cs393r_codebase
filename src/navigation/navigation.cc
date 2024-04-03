@@ -344,7 +344,7 @@ float Navigation::ComputeClearance(float free_path_len, float curv) {
   return min_clearance;
 }
 
-float Navigation::ComputeFreePathLength(float curvature, Eigen::Vector2f &endpoint) {
+float Navigation::ComputeFreePathLength(float curvature, const Eigen::Vector2f &goal, Eigen::Vector2f &endpoint) {
    /* notation
   Angle
     theta: turing angle
@@ -368,19 +368,38 @@ float Navigation::ComputeFreePathLength(float curvature, Eigen::Vector2f &endpoi
   
 
 
-
-  float free_path_length = 10.0;
+  const float range_max = 10.f;
+  float free_path_length = range_max;
 
   if (curvature==0) {
     // go straight
+    bool all_no_collision = true;
     for (auto point : point_cloud_) {
       if (point.y() <= car_inner_y && point.y() >= car_outter_y && point.x() >= car_front_x) {
-        free_path_length = std::min(free_path_length, point.x() - car_front_x );
+        // collision
+        const float cur_free_path_length = point.x() - car_front_x;
+        if (cur_free_path_length < free_path_length) {
+          free_path_length = cur_free_path_length;
+          endpoint = Vector2f(point.x(), 0);
+        }
+        all_no_collision = false;
+      }
+
+      if (all_no_collision) {
+        endpoint = Vector2f(range_max, 0);
+        free_path_length = range_max;
+      }
+
+      // check if the nearest endpoint is in the halfway.
+      // nearest endpoint: from it to goal is perpendicular to +x
+      if (goal.x() < endpoint.x()) {
+        free_path_length = std::fabs(goal.x());
+        endpoint = Vector2f(goal.x(), 0);
       }
     }
   } else {
     // go curve
-    const float r = 1.0 / std::abs(curvature);
+    const float r = 1.0 / std::fabs(curvature);
     const Vector2f center_pt = Vector2f(0,r);  // turning instant center
     const Vector2f car_inner_front_pt = Vector2f(car_front_x,car_inner_y);
     const Vector2f car_outter_front_pt = Vector2f(car_front_x,car_outter_y);
@@ -395,6 +414,7 @@ float Navigation::ComputeFreePathLength(float curvature, Eigen::Vector2f &endpoi
     // const float r_2 = (center_pt - car_outter_rear_pt ).norm();
 
 
+    bool all_no_collision = true;
     for (auto point : point_cloud_) {
       if (curvature < 0)
         point.y() = -point.y();
@@ -424,16 +444,50 @@ float Navigation::ComputeFreePathLength(float curvature, Eigen::Vector2f &endpoi
 
       if (collision) {
         //  turning angle: init base_link -> new base_link = theta - omega
-        float cur_free_path_length = (theta - omega) * r; // turning_angle * r
+        const float turning_angle = theta - omega;
+        float cur_free_path_length = turning_angle * r; // turning_angle * r
 
         //std::cout<<"cur_free_path_length="<<cur_free_path_length<<" free_path_length="<<free_path_length<<"\n";
         if (cur_free_path_length < free_path_length) {
           free_path_length = cur_free_path_length;
-          endpoint = point;
+
+          endpoint.x() = r * std::sin(turning_angle);
+          endpoint.y() = std::fabs(r - r * std::cos(turning_angle)) * (curvature < 0 ? -1.f : 1.f);
         }
-      } 
+
+        all_no_collision = false;
+      }
     }
     
+    // check if the nearest endpoint is in the halfway.
+    // nearest endpoint: the intersection of the circle
+    // and the line from the center to the goal
+    Vector2f halfway_endpoint;
+    float halfway_free_path_length;
+
+    Vector2f goal_in_circle_coordinate;
+    if (curvature > 0) {
+      goal_in_circle_coordinate.x() = -goal.y() + r;
+      goal_in_circle_coordinate.y() = goal.x();
+    } else {
+      goal_in_circle_coordinate.x() = goal.y() + r;
+      goal_in_circle_coordinate.y() = goal.x();
+    }
+
+    Vector2f endpoint_in_circle_coordinate = goal_in_circle_coordinate.normalized() * r;
+    halfway_endpoint.x() = endpoint_in_circle_coordinate.y();
+    halfway_endpoint.y() = std::fabs(-endpoint_in_circle_coordinate.x() + r) * (curvature < 0 ? -1.f : 1.f);
+
+    float turning_angle = std::atan2(goal_in_circle_coordinate.y(), goal_in_circle_coordinate.x());
+    if (turning_angle < 0) {
+      turning_angle += 2 * M_PI;
+    }
+    halfway_free_path_length = turning_angle * r;
+
+    if (all_no_collision || halfway_free_path_length < free_path_length) {
+      free_path_length = halfway_free_path_length;
+      endpoint = halfway_endpoint;
+    }
   }
 
   // draw free path length along the curve (cyan)
@@ -443,16 +497,18 @@ float Navigation::ComputeFreePathLength(float curvature, Eigen::Vector2f &endpoi
 }
 
 PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs, const Eigen::Vector2f &goal) {
-  // convert goal from map coordinate to base link
-  Eigen::Matrix3f map_to_base_link;
-  map_to_base_link << 
-    std::cos(robot_angle_), -std::sin(robot_angle_), robot_loc_.x(),
-    std::sin(robot_angle_),  std::cos(robot_angle_), robot_loc_.y(),
-    0.f, 0.f, 1.f;
-  map_to_base_link = map_to_base_link.inverse();
-  Eigen::Vector3f p(goal.x(), goal.y(), 1.f);
-  p = map_to_base_link * p;
-  const Vector2f goal_base_link(p.x() / p.z(), p.y() / p.z());
+  Vector2f diff = goal - robot_loc_;
+  Vector2f goal_base_link;
+  goal_base_link.x() = diff.x() * std::cos(robot_angle_) + diff.y() * std::sin(robot_angle_);
+  goal_base_link.y() = -diff.x() * std::sin(robot_angle_) + diff.y() * std::cos(robot_angle_);
+  cout << "goal_base_link: (" << goal_base_link.x() << ", " << goal_base_link.y() << ")" << endl;
+
+  visualization::DrawCross(
+    goal_base_link,
+    CONFIG_grid_dx / 2.0,
+    0xff7f50,
+    local_viz_msg_
+  );
 
   float highest_score = -std::numeric_limits<float>::infinity();
   PathOption best_path;
@@ -462,9 +518,10 @@ PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs, const Ei
   Vector2f selected_endpoint;
   for (auto _curv : candidate_curvs) {
     Vector2f endpoint;
-    float distance_to_goal = -1;
-    float free_path_len = ComputeFreePathLength(_curv, goal_base_link, endpoint, distance_to_goal);
+    float free_path_len = ComputeFreePathLength(_curv, goal_base_link, endpoint);
     float clearance = ComputeClearance(free_path_len, _curv);
+    const float distance_to_goal = (goal_base_link - endpoint).norm();
+
     // draw options (gray)
     visualization::DrawCross(
       endpoint,
@@ -486,9 +543,12 @@ PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs, const Ei
                   score_curv * std::fabs(_curv) +
                   score_goal * distance_to_goal;
 
-    cout << "=== curvature: " << _curv << " ===" << endl;
-    cout << "score: " << score << endl;
-    cout << "free_path_len: " << free_path_len << endl;
+    cout << "=== curvature: " << _curv << " ===\n";
+    cout << "score: " << score << "\n";
+    cout << "free_path_len: " << free_path_len << "\n";
+    cout << "clearance: " << clearance << "\n";
+    cout << "curvature: " << std::fabs(_curv) << "\n";
+    cout << "endpoint: (" << endpoint.x() << ", " << endpoint.y() << ")\n";
     cout << "dist(endpoint, goal): " << distance_to_goal << " * " << score_goal << " = " << score_goal * distance_to_goal << "\n" << endl;
 
     if (score > highest_score) {
@@ -529,12 +589,14 @@ PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs, const Ei
     
 }
 
-void Navigation::LocalPlanner(Eigen::Vector2f &intermediate_goal) {
+void Navigation::LocalPlanner() {
   static vector<Eigen::Vector2f> path;
   static int index = 0;
 
   // check if we need to replan
-  if (path.size() == 0 || (robot_loc_ - intermediate_goal).norm() > CONFIG_dist_replan) {
+  if (path.size() == 0 || intermediate_goal.isApprox(Vector2f(-1, -1)) ||
+      (robot_loc_ - intermediate_goal).norm() > CONFIG_dist_replan) {
+    path.clear();
     GlobalPlanner(path);
     index = 0;
   }
@@ -569,8 +631,7 @@ void Navigation::LocalPlanner(Eigen::Vector2f &intermediate_goal) {
 }
 
 void Navigation::ObstacleAvoidance() {
-  static Eigen::Vector2f intermediate_goal(-1, -1);
-  LocalPlanner(intermediate_goal);
+  LocalPlanner();
 
   // intermediate goal (black)
   visualization::DrawCross(
@@ -618,6 +679,7 @@ void Navigation::ObstacleAvoidance() {
 
 bool Navigation::CheckNavComplete() {
   if (nav_complete_) {
+    intermediate_goal = Vector2f(-1, -1);
     return true;
   }
   nav_complete_ = (robot_loc_ - nav_goal_loc_).norm() < CONFIG_dist_nav_complete;
