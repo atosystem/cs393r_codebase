@@ -6,8 +6,8 @@ init_r = 0; -- in degrees
 
 -- Initialize()
 M_PI = 3.14159265358979323846264338327950288;
-x_std = 0.5;
-y_std = 0.5;
+x_std = 0.01;
+y_std = 0.01;
 r_std = 0.0;
 
 -- Predict()

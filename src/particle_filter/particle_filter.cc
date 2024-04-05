@@ -49,7 +49,7 @@ using Eigen::Vector2i;
 using vector_map::VectorMap;
 using math_util::AngleDiff;
 
-DEFINE_double(num_particles, 100, "Number of particles");
+DEFINE_double(num_particles, 50, "Number of particles");
 
 CONFIG_FLOAT(x_std, "x_std");
 CONFIG_FLOAT(y_std, "y_std");
