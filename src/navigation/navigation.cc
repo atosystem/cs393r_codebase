@@ -61,6 +61,7 @@ CONFIG_FLOAT(grid_dy, "grid_dy"); // dy for grid construction
 CONFIG_FLOAT(dist_nav_complete, "dist_nav_complete"); // max distance to goal to be considered complete
 CONFIG_FLOAT(dist_replan, "dist_replan"); // min distance to intermediate goal to replan
 CONFIG_FLOAT(score_goal, "score_goal"); // weight for distance to goal
+CONFIG_INT(num_iters_replan, "num_iters_replan");
 
 namespace navigation {
 
@@ -592,14 +593,19 @@ PathOption Navigation::ChoosePath(const vector<float> &candidate_curvs, const Ei
 void Navigation::LocalPlanner() {
   static vector<Eigen::Vector2f> path;
   static int index = 0;
+  static int replan_count = 0;
 
   // check if we need to replan
-  if (path.size() == 0 || intermediate_goal.isApprox(Vector2f(-1, -1)) ||
+  if (path.size() == 0 ||
+      replan_count % CONFIG_num_iters_replan == 0 ||
+      intermediate_goal.isApprox(Vector2f(-1, -1)) ||
       (robot_loc_ - intermediate_goal).norm() > CONFIG_dist_replan) {
     path.clear();
     GlobalPlanner(path);
     index = 0;
+    replan_count = 0;
   }
+  replan_count++;
 
   // draw remaining path (red)
   for (size_t i = index; i < path.size(); ++i) {

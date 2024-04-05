@@ -5,3 +5,4 @@ grid_dy = 0.25;
 dist_nav_complete = 0.5;
 dist_replan = 5;
 score_goal = -5;
+num_iters_replan = 20;
