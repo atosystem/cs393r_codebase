@@ -34,7 +34,7 @@
 #define CAR_WIDTH 0.281
 #define CAR_BASE 0.324
 #define CAR_CMAX 1
-#define SAFETY_MARGIN 0.03
+#define SAFETY_MARGIN 0.07
 
 // heuristic 
 #define PENALTY_CURVE  2

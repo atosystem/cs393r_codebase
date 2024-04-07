@@ -597,18 +597,20 @@ void Navigation::LocalPlanner() {
 
   // check if we need to replan
   if (path.size() == 0 ||
-      replan_count % CONFIG_num_iters_replan == 0 ||
-      intermediate_goal.isApprox(Vector2f(-1, -1)) ||
-      (robot_loc_ - intermediate_goal).norm() > CONFIG_dist_replan) {
+      replan_count % CONFIG_num_iters_replan == 0 
+      // intermediate_goal.isApprox(Vector2f(-1, -1)) ||
+      // (robot_loc_ - intermediate_goal).norm() > CONFIG_dist_replan
+      ) {
     path.clear();
     GlobalPlanner(path);
     index = 0;
     replan_count = 0;
+    cout << "Now replanning" << endl;
   }
   replan_count++;
 
   // draw remaining path (red)
-  for (size_t i = index; i < path.size(); ++i) {
+  for (size_t i = 0; i < path.size(); ++i) {
     visualization::DrawCross(
           path[i],
           CONFIG_grid_dx / 2.0,

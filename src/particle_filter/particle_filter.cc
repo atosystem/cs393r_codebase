@@ -457,8 +457,8 @@ void ParticleFilter::Predict(const Vector2f& odom_loc,
 
     // update particles
     _particle.loc.x() = _particle.loc.x() + dx_map;
-    _particle.loc.y() = _particle.loc.y() + dy_map;
-    _particle.angle = _particle.angle + dangle_map;
+    _particle.loc.y() = _particle.loc.y() + dy_map* 1.05;
+    _particle.angle = _particle.angle + dangle_map*1.01;
 
     // zero out prob (= assign -inf to log prob) to ``filter out'' the particles that pass through the wall
     const line2f my_line(prev_x, prev_y, _particle.loc.x(), _particle.loc.y());
