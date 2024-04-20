@@ -68,6 +68,16 @@ void SLAM::ObserveLaser(const vector<float>& ranges,
   // A new laser scan has been observed. Decide whether to add it as a pose
   // for SLAM. If decided to add, align it to the scan from the last saved pose,
   // and save both the scan and the optimized pose.
+
+  if (shouldAddPgNode()) {
+    updatePoseGraph(ranges, range_min, range_max, angle_min, angle_max);
+  }
+
+
+  // TODO: convert lidar to point cloud.
+  // Ian
+
+  // TODO: update pose graph.
 }
 
 void SLAM::ObserveOdometry(const Vector2f& odom_loc, const float odom_angle) {
@@ -79,6 +89,17 @@ void SLAM::ObserveOdometry(const Vector2f& odom_loc, const float odom_angle) {
   }
   // Keep track of odometry to estimate how far the robot has moved between 
   // poses.
+
+  // TODO: 
+  // if (!odom_initialized_) {
+  //         odom_initialized_ = true;
+  //     }
+
+  //     cumulative_dist_since_laser_laser_align_ += (odom_loc - prev_odom_loc_).norm();
+
+  //     prev_odom_angle_ = odom_angle;
+  //     prev_odom_loc_ = odom_loc;
+
 }
 
 vector<Vector2f> SLAM::GetMap() {
