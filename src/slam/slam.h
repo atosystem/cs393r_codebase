@@ -32,6 +32,7 @@
 #include "eigen3/Eigen/Dense"
 #include "eigen3/Eigen/Geometry"
 #include "pg_node.h"
+#include "shared/math/poses_2d.h"
 
 #ifndef SRC_SLAM_H_
 #define SRC_SLAM_H_
@@ -89,7 +90,7 @@ namespace slam
      *
      */
     void addObservationConstraint(const size_t &from_node_num, const size_t &to_node_num,
-                                  std::pair<std::pair<Eigen::Vector2f, float>, Eigen::MatrixXd> &constraint_info);
+                                  std::pair<pose_2d::Pose2Df, Eigen::MatrixXd> &constraint_info);
 
     /**
      * Optimize the pose graph and update the estimated poses in the nodes.
@@ -107,7 +108,8 @@ namespace slam
      * @param csm_results[out]      Pair with first entry as estimated position of node 2 relative to node 1 based on
      *                          scan alignment and second entry as estimated covariance.
      */
-    void runCSM(PgNode &base_node, PgNode &match_node, std::pair<std::pair<Eigen::Vector2f, float>, Eigen::MatrixXd> &csm_results);
+    void runCSM(PgNode &base_node, PgNode &match_node, std::pair<pose_2d::Pose2Df, Eigen::MatrixXd> &csm_results);
+
 
     // Utility functions.
     void convertLidar2PointCloud(
@@ -117,6 +119,8 @@ namespace slam
         float angle_min,
         float angle_max);
 
+    pose_2d::Pose2Df getRelPose(const pose_2d::Pose2Df & pose, const pose_2d::Pose2Df & ref_pose);
+
   private:
     // Previous odometry-reported locations.
     Eigen::Vector2f prev_odom_loc_;
@@ -124,6 +128,21 @@ namespace slam
     bool odom_initialized_;
 
     std::vector<Eigen::Vector2f> recent_point_cloud_;
+
+    bool first_scan;
+
+    pose_2d::Pose2Df last_node_odom_pose_;
+
+    float last_node_cumulative_dist_;
+
+
+    gtsam::NonlinearFactorGraph* graph_;
+
+    gtsam::ISAM2 *isam_;
+
+    std::vector<PgNode> pg_nodes_;
+
+
   };
 } // namespace slam
 

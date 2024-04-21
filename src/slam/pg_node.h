@@ -4,6 +4,8 @@
 #include <eigen3/Eigen/Geometry>
 
 #include <vector>
+#include "shared/math/math_util.h"
+#include "shared/math/poses_2d.h"
 
 namespace slam
 {
@@ -14,29 +16,27 @@ namespace slam
         /**
          * Create the Pg node.
          *
-         * @param init_pos                  Initial position estimate for the node.
-         * @param init_orientation          Initial orientation estimate for the node.
+         * @param init_pos                  Initial pose estimate for the node.
          * @param node_number               Node number (to be used in factor graph).
          * @param point_cloud               Point cloud for the node.
          */
 
-        PgNode(const Eigen::Vector2f &init_pos, const float &init_orientation, const uint32_t &node_number)
-            : node_loc_(init_pos), node_orientation_(init_orientation), node_number_(node_number)
+        PgNode(const pose_2d::Pose2Df &node_pose_, const uint32_t &node_number)
+            : node_pose_(node_pose_), node_number_(node_number)
         {
         }
 
         /**
-         * Set the position of the node.
+         * Set the pose of the node.
          *
          * This should be called after a pose-graph optimization is called.
          *
          * @param new_loc           New location for the node.
          * @param new_orientation   New orientation for the node.
          */
-        void setPosition(const Eigen::Vector2f &new_loc, const float &new_orientation)
+        void setPose(const Eigen::Vector2f &new_loc, const float &new_orientation)
         {
-            node_loc_ = new_loc;
-            node_orientation_ = new_orientation;
+            node_pose_.Set(new_orientation, new_loc);
         }
 
         /**
@@ -61,9 +61,9 @@ namespace slam
          * Get the estimated position of the node.
          * @return
          */
-        std::pair<Eigen::Vector2f, float> getEstimatedPosition() const
+        pose_2d::Pose2Df getEstimatedPose() const
         {
-            return std::make_pair(node_loc_, node_orientation_);
+            return node_pose_;
         }
 
         /**
@@ -78,14 +78,10 @@ namespace slam
 
     private:
         /**
-         * Location of the node, as computed by the pose graph algorithm.
+         * Pose of the node, as computed by the pose graph algorithm.
          */
-        Eigen::Vector2f node_loc_;
 
-        /**
-         * Orientation of the node, as computed by the pose graph algorithm.
-         */
-        float node_orientation_;
+        pose_2d::Pose2Df node_pose_;
 
         /**
          * Number of the node.
