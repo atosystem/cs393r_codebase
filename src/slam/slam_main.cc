@@ -52,19 +52,19 @@
 #include "visualization/visualization.h"
 
 using amrl_msgs::VisualizationMsg;
-using geometry::line2f;
+using Eigen::Vector2f;
 using geometry::Line;
+using geometry::line2f;
 using math_util::DegToRad;
 using math_util::RadToDeg;
 using ros::Time;
 using std::string;
 using std::vector;
-using Eigen::Vector2f;
 using visualization::ClearVisualizationMsg;
 using visualization::DrawArc;
-using visualization::DrawPoint;
 using visualization::DrawLine;
 using visualization::DrawParticle;
+using visualization::DrawPoint;
 
 // Create command line arguements
 DEFINE_string(laser_topic, "/scan", "Name of ROS topic for LIDAR data");
@@ -79,7 +79,8 @@ ros::Publisher localization_publisher_;
 VisualizationMsg vis_msg_;
 sensor_msgs::LaserScan last_laser_msg_;
 
-void InitializeMsgs() {
+void InitializeMsgs()
+{
   std_msgs::Header header;
   header.frame_id = "map";
   header.seq = 0;
@@ -87,9 +88,11 @@ void InitializeMsgs() {
   vis_msg_ = visualization::NewVisualizationMessage("map", "slam");
 }
 
-void PublishMap() {
+void PublishMap()
+{
   static double t_last = 0;
-  if (GetMonotonicTime() - t_last < 0.5) {
+  if (GetMonotonicTime() - t_last < 0.5)
+  {
     // Rate-limit visualization.
     return;
   }
@@ -99,13 +102,15 @@ void PublishMap() {
 
   const vector<Vector2f> map = slam_.GetMap();
   printf("Map: %lu points\n", map.size());
-  for (const Vector2f& p : map) {
+  for (const Vector2f &p : map)
+  {
     visualization::DrawPoint(p, 0xC0C0C0, vis_msg_);
   }
   visualization_publisher_.publish(vis_msg_);
 }
 
-void PublishPose() {
+void PublishPose()
+{
   Vector2f robot_loc(0, 0);
   float robot_angle(0);
   slam_.GetPose(&robot_loc, &robot_angle);
@@ -116,8 +121,10 @@ void PublishPose() {
   localization_publisher_.publish(localization_msg);
 }
 
-void LaserCallback(const sensor_msgs::LaserScan& msg) {
-  if (FLAGS_v > 0) {
+void LaserCallback(const sensor_msgs::LaserScan &msg)
+{
+  if (FLAGS_v > 0)
+  {
     printf("Laser t=%f\n", msg.header.stamp.toSec());
   }
   last_laser_msg_ = msg;
@@ -131,8 +138,10 @@ void LaserCallback(const sensor_msgs::LaserScan& msg) {
   PublishPose();
 }
 
-void OdometryCallback(const nav_msgs::Odometry& msg) {
-  if (FLAGS_v > 0) {
+void OdometryCallback(const nav_msgs::Odometry &msg)
+{
+  if (FLAGS_v > 0)
+  {
     printf("Odometry t=%f\n", msg.header.stamp.toSec());
   }
   const Vector2f odom_loc(msg.pose.pose.position.x, msg.pose.pose.position.y);
@@ -141,8 +150,8 @@ void OdometryCallback(const nav_msgs::Odometry& msg) {
   slam_.ObserveOdometry(odom_loc, odom_angle);
 }
 
-
-int main(int argc, char** argv) {
+int main(int argc, char **argv)
+{
   google::ParseCommandLineFlags(&argc, &argv, false);
   // Initialize ROS.
   ros::init(argc, argv, "slam");
