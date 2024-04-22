@@ -24,7 +24,6 @@
 #include <iostream>
 #include <ros/ros.h>
 #include <gtsam/nonlinear/ISAM2.h>
-#include "math_utils.h"
 #include "eigen3/Eigen/Dense"
 #include "eigen3/Eigen/Geometry"
 #include "gflags/gflags.h"
@@ -65,6 +64,7 @@ CONFIG_FLOAT(new_node_y_std,"new_node_y_std");
 CONFIG_FLOAT(new_node_theta_std,"new_node_theta_std");
 CONFIG_FLOAT(max_factors_per_node,"max_factors_per_node");
 CONFIG_FLOAT(maximum_node_dis_scan_comparison,"maximum_node_dis_scan_comparison");
+CONFIG_BOOL(non_successive_scan_constraints,"non_successive_scan_constraints");
 
 
 // Motion Model Parameters
@@ -127,6 +127,7 @@ namespace slam
     return false;
   }
 
+
   void SLAM::updatePoseGraph()
   {
     // TODO: update pose graph.
@@ -139,7 +140,7 @@ namespace slam
       // Add prior instead of odom
       // TODO: create first node
       // PgNode new_node = createNewPassFirstNode(ranges, range_min, range_max, angle_min, angle_max);
-      pose_2d::Pose2Df _pose;
+      pose_2d::Pose2Df _pose(0.0, Vector2f(0.0, 0.0));
       uint32_t node_number = pg_nodes_.size();
       PgNode new_node(_pose, node_number, recent_point_cloud_);
 
@@ -156,24 +157,23 @@ namespace slam
         prev_odom_loc_
       );
 
-      updatePoseGraphObsConstraints(new_node);
     }
     else
     {
       // not first scan
 
       // Get the estimated position change since the last node due to odometry
-      // std::pair<Vector2f, float> relative_loc_latest_pose = math_util::inverseTransformPoint(prev_odom_loc_, prev_odom_angle_, odom_loc_at_last_laser_align_, odom_angle_at_last_laser_align_);
-      pose_2d::Pose2Df rel_pos_to_last_node_odom_pose = getRelPose(pose_2d::Pose2Df(prev_odom_angle_,prev_odom_loc_),last_node_odom_pose_);
+      // transform prev odom change from map frame to last node's frame
+      pose_2d::Pose2Df rel_pos_to_last_node_odom_pose = transformPoseFromMap2Target(
+                                                          pose_2d::Pose2Df(prev_odom_angle_,prev_odom_loc_), 
+                                                          last_node_odom_pose_);
 
       // TODO: create new pgnode
-      // Create the node with the initial position estimate as the last node's position plus the odom
-      // DpgNode new_node = createRelativePositionedNode(ranges, range_min, range_max, angle_min, angle_max,
-      //                                                 odom_est_loc_displ,
-      //                                                 odom_est_angle_displ, pass_number_);
-      pose_2d::Pose2Df _pose;
+     
       uint32_t node_number = pg_nodes_.size();
-      PgNode new_node(_pose, node_number, recent_point_cloud_);
+      // TODO: not sure what frame to use here
+      // PgNode new_node(rel_pos_to_last_node_odom_pose, node_number, recent_point_cloud_);
+      PgNode new_node(pose_2d::Pose2Df(prev_odom_angle_,prev_odom_loc_), node_number, recent_point_cloud_);
 
       
       if (CONFIG_considerOdomConstraint)
@@ -232,7 +232,10 @@ namespace slam
     // TODO: need revision to real CSM
     // using fake CSM right now
 
-    pose_2d::Pose2Df rel_pose = match_node.getEstimatedPose() - base_node.getEstimatedPose();
+    // pose_2d::Pose2Df rel_pose = match_node.getEstimatedPose() - base_node.getEstimatedPose();
+    // match node's pose relative to base node's pose
+    pose_2d::Pose2Df rel_pose = transformPoseFromMap2Target(match_node.getEstimatedPose(), 
+                                                                                  base_node.getEstimatedPose());
 
     Eigen::Matrix3d est_cov;
       est_cov << 1.0, 0, 0,
@@ -279,42 +282,41 @@ void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
   addObservationConstraint(preceding_node.getNodeNumber(), new_node.getNodeNumber(), successive_scan_offset);
 
   // Add constraints for non-successive scans
-  if (CONFIG_non_successive_scan_constraints_ && pg_nodes_.size() > 2) {
+  if (CONFIG_non_successive_scan_constraints && pg_nodes_.size() > 2) {
       // TODO: specify skip_count and start_num
       int skip_count = 1;
       size_t start_num = 0;
       int num_added_factors = 0;
       // for every non-successive scan
       for (size_t i = start_num; i < (pg_nodes_.size() - 2); i+= skip_count) {
-        if (num_added_factors >= CONFIG_max_factors_per_node_) {
+        if (num_added_factors >= CONFIG_max_factors_per_node) {
             break;
         }
         
-        DpgNode node = pg_nodes_[i];
+        PgNode node = pg_nodes_[i];
 
         float node_dist = (node.getEstimatedPose().translation -
-                            preceding_node.getEstimatedPose().translation);
+                            preceding_node.getEstimatedPose().translation).norm();
         
-        if (node_dist <= CONFIG_maximum_node_dis_scan_comparison_) {
-            std::pair<std::pair<pose_2d::Pose2Df, Eigen::MatrixXd>, Eigen::MatrixXd> non_successive_scan_offset;
-            if (runCSM(node, preceding_node, non_successive_scan_offset)) {
-                // build edge of observation constraint
-                addObservationConstraint(node.getNodeNumber(), preceding_node.getNodeNumber(),
-                                          non_successive_scan_offset);
-                num_added_factors++;
-            }
+        if (node_dist <= CONFIG_maximum_node_dis_scan_comparison) {
+            std::pair<pose_2d::Pose2Df, Eigen::MatrixXd> non_successive_scan_offset;
+            runCSM(node, preceding_node, non_successive_scan_offset);
+            // build edge of observation constraint
+            addObservationConstraint(node.getNodeNumber(), preceding_node.getNodeNumber(),
+                                      non_successive_scan_offset);
+            num_added_factors++;
         }
       }
     }
   
   // TODO: should we put it in the beginning?
-  dpg_nodes_.push_back(new_node);
+  pg_nodes_.push_back(new_node);
 
   gtsam::Values init_estimate_for_new_node;
   init_estimate_for_new_node.insert(new_node.getNodeNumber(), Pose2(new_node.getEstimatedPose().translation.x(),
                                                                     new_node.getEstimatedPose().translation.y(),
                                                                     new_node.getEstimatedPose().angle));
-  optimizeGraph(init_estimate_for_new_node);
+  optimizePoseGraph(init_estimate_for_new_node);
 
 }
 
@@ -330,8 +332,6 @@ void SLAM::optimizePoseGraph(gtsam::Values &new_node_init_estimates) {
       // Node number is the key, so we'll access the results using that
       Pose2 estimated_pose = result.at<Pose2>(pg_node.getNodeNumber());
       pg_node.setPose(Vector2f(estimated_pose.x(), estimated_pose.y()), estimated_pose.theta());
-      // TODO: also need to update the point clouds w.r.t the changes ot node pose
-      // pg_node.setPointCloud(....);
   }
 }
 
@@ -347,8 +347,7 @@ vector<Eigen::Vector2f> SLAM::GetMap() {
 
       pose_2d::Pose2Df node_pose = node.getEstimatedPose();
       for (Eigen::Vector2f point : point_cloud) {
-          Vector2f bl_point(point.x, point.y);
-          map.push_back(math_utils::transformPoseFromSrc2Map(pose_2d::Pose2Df(0, bl_point), node_pose).translation);
+          map.push_back(transformPoseFromSrc2Map(pose_2d::Pose2Df(0, point), node_pose).translation);
       }
   }
   return map;
@@ -357,18 +356,32 @@ vector<Eigen::Vector2f> SLAM::GetMap() {
 
 
   // Utility functions
-  // get pose1 in pose2 frame
-  pose_2d::Pose2Df SLAM::getRelPose(const pose_2d::Pose2Df & pose, const pose_2d::Pose2Df & ref_pose) {
-    // Translate the point
-    Eigen::Vector2f trans = pose.translation - ref_pose.translation;
+  // trasfrom a 2D pose from src frame to map frame
+    pose_2d::Pose2Df SLAM::transformPoseFromSrc2Map(const pose_2d::Pose2Df & pose_rel_src_frame, const pose_2d::Pose2Df & src_frame_pose_rel_map_frame) {
+        // Rotate the point first
+        Eigen::Rotation2Df rotation_mat(src_frame_pose_rel_map_frame.angle);
+        Eigen::Vector2f rotated_still_src_transl = rotation_mat * pose_rel_src_frame.translation;
 
-    // Then rotate
-    Eigen::Rotation2Df rot_mat(-ref_pose.angle);
-    Eigen::Vector2f final_trans = rot_mat * trans;
+        // Then translate
+        Eigen::Vector2f rotated_and_translated = src_frame_pose_rel_map_frame.translation + rotated_still_src_transl;
+        float target_angle = AngleMod(src_frame_pose_rel_map_frame.angle + pose_rel_src_frame.angle);
 
-    float final_angle = AngleMod(pose.angle - ref_pose.angle);
+        return pose_2d::Pose2Df(target_angle, rotated_and_translated);
 
-    return pose_2d::Pose2Df(final_angle,final_trans);
-  }
+    }
+
+    // trasfrom a 2D pose from map frame to target frame
+    pose_2d::Pose2Df SLAM::transformPoseFromMap2Target(const pose_2d::Pose2Df & pose_rel_map_frame, const pose_2d::Pose2Df & target_frame_pose_rel_map_frame) {
+        // Translate the point
+        Eigen::Vector2f trans = pose_rel_map_frame.translation - target_frame_pose_rel_map_frame.translation;
+
+        // Then rotate
+        Eigen::Rotation2Df rot_mat(-target_frame_pose_rel_map_frame.angle);
+        Eigen::Vector2f final_trans = rot_mat * trans;
+
+        float final_angle = AngleMod(pose_rel_map_frame.angle - target_frame_pose_rel_map_frame.angle);
+
+        return pose_2d::Pose2Df(final_angle,final_trans);
+    }
 
 } // namespace slam

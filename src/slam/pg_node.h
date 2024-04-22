@@ -1,7 +1,7 @@
 #pragma once
 
-#include <eigen3/Eigen/Dense>
-#include <eigen3/Eigen/Geometry>
+#include "eigen3/Eigen/Dense"
+#include "eigen3/Eigen/Geometry"
 
 #include <vector>
 #include "shared/math/math_util.h"
@@ -22,7 +22,7 @@ namespace slam
          */
 
         PgNode(const pose_2d::Pose2Df &node_pose_, const uint32_t &node_number, std::vector<Eigen::Vector2f> point_cloud)
-            : node_pose_(node_pose_), node_number_(node_number), std::vector<Eigen::Vector2f> point_cloud(point_cloud)
+            : node_pose_(node_pose_), node_number_(node_number), point_cloud(point_cloud)
         {
         }
 

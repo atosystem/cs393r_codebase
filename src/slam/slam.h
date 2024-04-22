@@ -28,6 +28,7 @@
 #include <gtsam/nonlinear/Marginals.h>
 #include <gtsam/slam/PriorFactor.h>
 #include <gtsam/nonlinear/ISAM2.h>
+#include "gtsam/nonlinear/GaussNewtonOptimizer.h"
 
 #include "eigen3/Eigen/Dense"
 #include "eigen3/Eigen/Geometry"
@@ -122,8 +123,11 @@ namespace slam
         float angle_min,
         float angle_max);
 
-    pose_2d::Pose2Df getRelPose(const pose_2d::Pose2Df & pose, const pose_2d::Pose2Df & ref_pose);
+    pose_2d::Pose2Df transformPoseFromSrc2Map(const pose_2d::Pose2Df & pose_rel_src_frame, 
+                                            const pose_2d::Pose2Df & src_frame_pose_rel_map_frame);
 
+    pose_2d::Pose2Df transformPoseFromMap2Target(const pose_2d::Pose2Df & pose_rel_map_frame, 
+                                            const pose_2d::Pose2Df & target_frame_pose_rel_map_frame);
   private:
     // Previous odometry-reported locations.
     Eigen::Vector2f prev_odom_loc_;
