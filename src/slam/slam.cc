@@ -33,6 +33,7 @@
 #include "slam.h"
 
 #include "vector_map/vector_map.h"
+#include "config_reader/config_reader.h"
 
 using namespace math_util;
 using Eigen::Affine2f;
@@ -47,12 +48,22 @@ using std::swap;
 using std::vector;
 using vector_map::VectorMap;
 
+CONFIG_DOUBLE(scanner_range, "scanner_range");
+CONFIG_DOUBLE(trans_range, "trans_range");
+CONFIG_DOUBLE(low_res, "low_res");
+CONFIG_DOUBLE(high_res, "high_res");
+
 namespace slam {
 
 SLAM::SLAM() :
     prev_odom_loc_(0, 0),
     prev_odom_angle_(0),
-    odom_initialized_(false) {}
+    odom_initialized_(false),
+    matcher(
+      CONFIG_scanner_range,
+      CONFIG_trans_range,
+      CONFIG_low_res,
+      CONFIG_high_res) {}
 
 void SLAM::GetPose(Eigen::Vector2f* loc, float* angle) const {
   // Return the latest pose estimate of the robot.
@@ -86,6 +97,12 @@ vector<Vector2f> SLAM::GetMap() {
   // Reconstruct the map as a single aligned point cloud from all saved poses
   // and their respective scans.
   return map;
+}
+
+void SLAM::ScanMatch(PgNode &base_node, PgNode &match_node,
+                     pair<Trans, Eigen::Matrix3f> &result) {
+  result = matcher.GetTransAndUncertainty(
+    base_node.getPointCloud(), match_node.getPointCloud());
 }
 
 }  // namespace slam
