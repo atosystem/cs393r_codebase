@@ -268,6 +268,79 @@ namespace slam
       recent_point_cloud_.push_back(_point);
     }
   }
+void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
+  
+  PgNode preceding_node = pg_nodes_.back();
+
+  // Add laser factor for previous pose and this node
+  std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> successive_scan_offset;
+  runCSM(preceding_node, new_node, successive_scan_offset); 
+  // build edge of observation constraint
+  addObservationConstraint(preceding_node.getNodeNumber(), new_node.getNodeNumber(), successive_scan_offset);
+
+  // Add constraints for non-successive scans
+  if (CONFIG_non_successive_scan_constraints_ && pg_nodes_.size() > 2) {
+      // TODO: specify skip_count and start_num
+      int skip_count = 1;
+      size_t start_num = 0;
+      int num_added_factors = 0;
+      // for every non-successive scan
+      for (size_t i = start_num; i < (pg_nodes_.size() - 2); i+= skip_count) {
+        if (num_added_factors >= CONFIG_max_factors_per_node_) {
+            break;
+        }
+        
+        DpgNode node = pg_nodes_[i];
+
+        float node_dist = (node.getEstimatedPosition().first -
+                            preceding_node.getEstimatedPosition().first).norm();
+        
+        if (node_dist <= CONFIG_maximum_node_dis_scan_comparison_) {
+            std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> non_successive_scan_offset;
+            if (runCSM(node, preceding_node, non_successive_scan_offset)) {
+                // build edge of observation constraint
+                addObservationConstraint(node.getNodeNumber(), preceding_node.getNodeNumber(),
+                                          non_successive_scan_offset);
+                num_added_factors++;
+            }
+        }
+      }
+    }
+  
+  // TODO: should we put it in the beginning?
+  dpg_nodes_.push_back(new_node);
+
+  gtsam::Values init_estimate_for_new_node;
+  init_estimate_for_new_node.insert(new_node.getNodeNumber(), Pose2(new_node.getEstimatedPosition().first.x(),
+                                                                    new_node.getEstimatedPosition().first.y(),
+                                                                    new_node.getEstimatedPosition().second));
+  optimizeGraph(init_estimate_for_new_node);
+
+}
+
+void SLAM::optimizePoseGraph(gtsam::Values &new_node_init_estimates) {
+  // Optimize the trajectory and update the nodes' position estimates
+  // TODO do we need other params here?
+  isam_->update(*graph_, new_node_init_estimates);
+  Values result = isam_->calculateEstimate();
+
+  // update each node int the graph using the optimized values
+  for (PgNode &pg_node : pg_nodes_) {
+
+      // Node number is the key, so we'll access the results using that
+      Pose2 estimated_pose = result.at<Pose2>(pg_node.getNodeNumber());
+      pg_node.setPosition(Vector2f(estimated_pose.x(), estimated_pose.y()), estimated_pose.theta());
+  }
+}
+
+
+
+vector<Vector2f> SLAM::GetMap() {
+  vector<Vector2f> map;
+  // Reconstruct the map as a single aligned point cloud from all saved poses
+  // and their respective scans.
+  return map;
+}
 
   vector<Vector2f> SLAM::GetMap()
   {

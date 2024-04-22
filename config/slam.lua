@@ -14,3 +14,6 @@ considerOdomConstraint = false;
 new_node_x_std = 1.0;
 new_node_y_std = 1.0;
 new_node_theta_std = 1.0;
+non_successive_scan_constraints = true
+max_factors_per_node = 
+maximum_node_dis_scan_comparison = 

@@ -69,6 +69,8 @@ namespace slam
      * @return true if the robot has moved far enough.
      */
     bool shouldAddPgNode();
+ 
+  
 
     /**
      * @brief update pose graph with latest scans.
@@ -78,10 +80,11 @@ namespace slam
     void updatePoseGraph();
 
     /**
-     * @brief
-     * 1. successive scan
-     * 2. non_successive_scan_constraints_: connect new node with all previous nodes.
-     * @param new_node
+     * @brief build edges of new node with previous nodes by observation constraints.
+     *        can include successive and non-successive nodes.
+     *        call addObservationConstraint() to add edges.
+     *        call optimizePoseGraph() to optimize the whole graph.
+     * @param new_node  a new node that should be connected with all previous nodes by observation constraint
      */
     void updatePoseGraphObsConstraints(PgNode &new_node);
 
