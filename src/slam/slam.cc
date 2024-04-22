@@ -52,6 +52,10 @@ CONFIG_DOUBLE(scanner_range, "scanner_range");
 CONFIG_DOUBLE(trans_range, "trans_range");
 CONFIG_DOUBLE(low_res, "low_res");
 CONFIG_DOUBLE(high_res, "high_res");
+CONFIG_DOUBLE(k1, "k1");
+CONFIG_DOUBLE(k2, "k2");
+CONFIG_DOUBLE(k3, "k3");
+CONFIG_DOUBLE(k4, "k4");
 
 namespace slam {
 
@@ -60,10 +64,9 @@ SLAM::SLAM() :
     prev_odom_angle_(0),
     odom_initialized_(false),
     matcher(
-      CONFIG_scanner_range,
-      CONFIG_trans_range,
-      CONFIG_low_res,
-      CONFIG_high_res) {}
+      CONFIG_scanner_range, CONFIG_trans_range,
+      CONFIG_low_res, CONFIG_high_res,
+      CONFIG_k1, CONFIG_k2, CONFIG_k3, CONFIG_k4) {}
 
 void SLAM::GetPose(Eigen::Vector2f* loc, float* angle) const {
   // Return the latest pose estimate of the robot.
@@ -101,10 +104,17 @@ vector<Vector2f> SLAM::GetMap() {
 
 void SLAM::ScanMatch(PgNode &base_node, PgNode &match_node,
                      pair<pose_2d::Pose2Df, Eigen::Matrix3f> &result) {
-  pair<Trans, Eigen::Matrix3f> trans_and_uncertainty =
-    matcher.GetTransAndUncertainty(base_node.getPointCloud(), match_node.getPointCloud());
-  const Trans &trans = trans_and_uncertainty.first;
+  // Calculate initial guess of the relative pose from odometry.
+  const pose_2d::Pose2Df &base_pose = base_node.getPose();
+  const pose_2d::Pose2Df &match_pose = match_node.getPose();
+  const Trans odom(
+    match_pose.translation - base_pose.translation,
+    AngleDiff(match_pose.angle, base_pose.angle));
 
+  // Run the scan matcher to get the relative pose and uncertainty.
+  const pair<Trans, Eigen::Matrix3f> trans_and_uncertainty =
+    matcher.GetTransAndUncertainty(base_node.getPointCloud(), match_node.getPointCloud(), odom);
+  const Trans &trans = trans_and_uncertainty.first;
   result.first = pose_2d::Pose2Df(trans.second, trans.first);
   result.second = trans_and_uncertainty.second;
 }

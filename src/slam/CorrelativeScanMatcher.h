@@ -16,6 +16,7 @@
 
 #include "visualization/CImg.h"
 #include "shared/math/math_util.h"
+#include "shared/math/statistics.h"
 
 #define DEFAULT_GAUSSIAN_SIGMA 4
 #define MIN_VALUE_FOR_LOOKUP 1E-10
@@ -24,6 +25,7 @@ using cimg_library::CImg;
 using Eigen::Vector2f;
 using std::pair;
 using std::vector;
+using statistics::ProbabilityDensityGaussian;
 
 typedef pair<Vector2f, float> Trans;
 typedef pair<double, Trans> TransProb;
@@ -116,11 +118,13 @@ struct LookupTable {
 class CorrelativeScanMatcher {
  public:
   CorrelativeScanMatcher(double scanner_range, double trans_range,
-                         double low_res, double high_res)
+                         double low_res, double high_res,
+                         float k1, float k2, float k3, float k4)
       : scanner_range_(scanner_range),
         trans_range_(trans_range),
         low_res_(low_res),
-        high_res_(high_res) {}
+        high_res_(high_res),
+        k1_(k1), k2_(k2), k3_(k3), k4_(k4) {}
   TransProb GetTransformation(
       const vector<Vector2f>& pointcloud_a,
       const vector<Vector2f>& pointcloud_b,
@@ -139,7 +143,8 @@ class CorrelativeScanMatcher {
                                        const double rotation);
   pair<Trans, Eigen::Matrix3f> GetTransAndUncertainty(
       const vector<Vector2f>& pointcloud_a,
-      const vector<Vector2f>& pointcloud_b);
+      const vector<Vector2f>& pointcloud_b,
+      const Trans& odom);
   // Computes the local uncertainty of the *last* scan in the provided vector of
   // point clouds, relative to the previous ones
   std::pair<double, double> GetLocalUncertaintyStats(
@@ -155,10 +160,12 @@ class CorrelativeScanMatcher {
       const vector<Vector2f>& pointcloud_a, const LookupTable& pointcloud_b_cost,
       double resolution, double x_min, double x_max, double y_min, double y_max,
       double rotation);
+  double EvaluateMotionModel(const Trans &trans, const Trans &odom);
   double scanner_range_;
   double trans_range_;
   double low_res_;
   double high_res_;
+  float k1_, k2_, k3_, k4_;
 };
 
 #endif  // SRC_SLAM_CORRELATIVESCANMATCHER_H_

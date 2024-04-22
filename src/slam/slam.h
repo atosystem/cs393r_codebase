@@ -34,7 +34,8 @@
 namespace slam {
 
 struct PgNode {
-  std::vector<Eigen::Vector2f> getPointCloud() { return std::vector<Eigen::Vector2f>(0); }
+  std::vector<Eigen::Vector2f> getPointCloud() { return {}; }
+  pose_2d::Pose2Df getPose() { return {}; }
 };
 
 class SLAM {

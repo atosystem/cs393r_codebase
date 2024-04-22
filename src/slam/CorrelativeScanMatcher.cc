@@ -386,7 +386,8 @@ std::pair<double, double> CorrelativeScanMatcher::GetLocalUncertaintyStats(
 
 pair<Trans, Eigen::Matrix3f> CorrelativeScanMatcher::GetTransAndUncertainty(
     const vector<Vector2f>& pointcloud_a,
-    const vector<Vector2f>& pointcloud_b) {
+    const vector<Vector2f>& pointcloud_b,
+    const Trans& odom) {
   // Calculation Method taken from Realtime Correlative Scan Matching
   // by Edward Olsen.
   Eigen::Matrix3f K = Eigen::Matrix3f::Zero();
@@ -422,9 +423,11 @@ pair<Trans, Eigen::Matrix3f> CorrelativeScanMatcher::GetTransAndUncertainty(
           cost = CalculatePointcloudCost(rotated_pointcloud_a, x_trans, y_trans,
                                          pointcloud_b_cost_high_res);
         }
+        const Trans trans(Vector2f(x_trans, y_trans), rotation);
+        cost += EvaluateMotionModel(trans, odom);
         if (cost > best.first) {
           best.first = cost;
-          best.second = Trans(Vector2f(x_trans, y_trans), rotation);
+          best.second = trans;
         }
         cost = exp(cost);
         Eigen::Vector3f x(x_trans, y_trans, rotation);
@@ -441,4 +444,21 @@ pair<Trans, Eigen::Matrix3f> CorrelativeScanMatcher::GetTransAndUncertainty(
   Eigen::Matrix3f uncertainty =
       (1.0 / s) * K - (1.0 / (s * s)) * u * u.transpose();
   return std::make_pair(best.second, uncertainty);
+}
+
+double CorrelativeScanMatcher::EvaluateMotionModel(
+    const Trans &trans, const Trans &odom) {
+  const float x_trans = trans.first.x(),
+              y_trans = trans.first.y(),
+              rotation = trans.second,
+              odom_trans = odom.first.norm(),
+              odom_rot = std::fabs(odom.second);
+
+  const float trans_error = k1_ * odom_trans + k2_ * odom_rot,
+                rot_error = k3_ * odom_trans + k4_ * odom_rot;
+
+  return (double) std::log(
+    ProbabilityDensityGaussian(x_trans, 0.f, trans_error) *
+    ProbabilityDensityGaussian(y_trans, 0.f, trans_error) *
+    ProbabilityDensityGaussian(rotation, 0.f, rot_error));
 }
