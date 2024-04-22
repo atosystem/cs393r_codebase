@@ -24,6 +24,7 @@
 #include <iostream>
 #include <ros/ros.h>
 #include <gtsam/nonlinear/ISAM2.h>
+#include "math_utils.h"
 #include "eigen3/Eigen/Dense"
 #include "eigen3/Eigen/Geometry"
 #include "gflags/gflags.h"
@@ -62,6 +63,8 @@ CONFIG_BOOL(considerOdomConstraint, "considerOdomConstraint");
 CONFIG_FLOAT(new_node_x_std,"new_node_x_std");
 CONFIG_FLOAT(new_node_y_std,"new_node_y_std");
 CONFIG_FLOAT(new_node_theta_std,"new_node_theta_std");
+CONFIG_FLOAT(max_factors_per_node,"max_factors_per_node");
+CONFIG_FLOAT(maximum_node_dis_scan_comparison,"maximum_node_dis_scan_comparison");
 
 
 // Motion Model Parameters
@@ -138,7 +141,7 @@ namespace slam
       // PgNode new_node = createNewPassFirstNode(ranges, range_min, range_max, angle_min, angle_max);
       pose_2d::Pose2Df _pose;
       uint32_t node_number = pg_nodes_.size();
-      PgNode new_node(_pose, node_number);
+      PgNode new_node(_pose, node_number, recent_point_cloud_);
 
       Pose2 init_pos(0.0, 0.0, 0.0);
       noiseModel::Diagonal::shared_ptr init_noise =
@@ -170,7 +173,7 @@ namespace slam
       //                                                 odom_est_angle_displ, pass_number_);
       pose_2d::Pose2Df _pose;
       uint32_t node_number = pg_nodes_.size();
-      PgNode new_node(_pose, node_number);
+      PgNode new_node(_pose, node_number, recent_point_cloud_);
 
       
       if (CONFIG_considerOdomConstraint)
@@ -200,9 +203,6 @@ namespace slam
     ROS_INFO_STREAM("Num nodes " << graph_->keys().size());
   }
 
-  void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
-    
-  }
 
   void SLAM::addObservationConstraint(const size_t &from_node_num, const size_t &to_node_num,
                                       std::pair<pose_2d::Pose2Df, Eigen::MatrixXd> &constraint_info)
@@ -273,7 +273,7 @@ void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
   PgNode preceding_node = pg_nodes_.back();
 
   // Add laser factor for previous pose and this node
-  std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> successive_scan_offset;
+  std::pair<pose_2d::Pose2Df, Eigen::MatrixXd> successive_scan_offset;
   runCSM(preceding_node, new_node, successive_scan_offset); 
   // build edge of observation constraint
   addObservationConstraint(preceding_node.getNodeNumber(), new_node.getNodeNumber(), successive_scan_offset);
@@ -292,11 +292,11 @@ void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
         
         DpgNode node = pg_nodes_[i];
 
-        float node_dist = (node.getEstimatedPosition().first -
-                            preceding_node.getEstimatedPosition().first).norm();
+        float node_dist = (node.getEstimatedPose().translation -
+                            preceding_node.getEstimatedPose().translation);
         
         if (node_dist <= CONFIG_maximum_node_dis_scan_comparison_) {
-            std::pair<std::pair<Vector2f, float>, Eigen::MatrixXd> non_successive_scan_offset;
+            std::pair<std::pair<pose_2d::Pose2Df, Eigen::MatrixXd>, Eigen::MatrixXd> non_successive_scan_offset;
             if (runCSM(node, preceding_node, non_successive_scan_offset)) {
                 // build edge of observation constraint
                 addObservationConstraint(node.getNodeNumber(), preceding_node.getNodeNumber(),
@@ -311,9 +311,9 @@ void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
   dpg_nodes_.push_back(new_node);
 
   gtsam::Values init_estimate_for_new_node;
-  init_estimate_for_new_node.insert(new_node.getNodeNumber(), Pose2(new_node.getEstimatedPosition().first.x(),
-                                                                    new_node.getEstimatedPosition().first.y(),
-                                                                    new_node.getEstimatedPosition().second));
+  init_estimate_for_new_node.insert(new_node.getNodeNumber(), Pose2(new_node.getEstimatedPose().translation.x(),
+                                                                    new_node.getEstimatedPose().translation.y(),
+                                                                    new_node.getEstimatedPose().angle));
   optimizeGraph(init_estimate_for_new_node);
 
 }
@@ -329,28 +329,35 @@ void SLAM::optimizePoseGraph(gtsam::Values &new_node_init_estimates) {
 
       // Node number is the key, so we'll access the results using that
       Pose2 estimated_pose = result.at<Pose2>(pg_node.getNodeNumber());
-      pg_node.setPosition(Vector2f(estimated_pose.x(), estimated_pose.y()), estimated_pose.theta());
+      pg_node.setPose(Vector2f(estimated_pose.x(), estimated_pose.y()), estimated_pose.theta());
+      // TODO: also need to update the point clouds w.r.t the changes ot node pose
+      // pg_node.setPointCloud(....);
   }
 }
 
 
 
-vector<Vector2f> SLAM::GetMap() {
-  vector<Vector2f> map;
+vector<Eigen::Vector2f> SLAM::GetMap() {
+  vector<Eigen::Vector2f> map;
   // Reconstruct the map as a single aligned point cloud from all saved poses
   // and their respective scans.
+  for (size_t i = 0; i < pg_nodes_.size(); i++) {
+      PgNode node = pg_nodes_[i];
+      std::vector<Eigen::Vector2f> point_cloud = node.getPointCloud();
+
+      pose_2d::Pose2Df node_pose = node.getEstimatedPose();
+      for (Eigen::Vector2f point : point_cloud) {
+          Vector2f bl_point(point.x, point.y);
+          map.push_back(math_utils::transformPoseFromSrc2Map(pose_2d::Pose2Df(0, bl_point), node_pose).translation);
+      }
+  }
   return map;
 }
 
-  vector<Vector2f> SLAM::GetMap()
-  {
-    vector<Vector2f> map;
-    // Reconstruct the map as a single aligned point cloud from all saved poses
-    // and their respective scans.
-    return map;
-  }
+
 
   // Utility functions
+  // get pose1 in pose2 frame
   pose_2d::Pose2Df SLAM::getRelPose(const pose_2d::Pose2Df & pose, const pose_2d::Pose2Df & ref_pose) {
     // Translate the point
     Eigen::Vector2f trans = pose.translation - ref_pose.translation;

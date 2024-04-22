@@ -21,8 +21,8 @@ namespace slam
          * @param point_cloud               Point cloud for the node.
          */
 
-        PgNode(const pose_2d::Pose2Df &node_pose_, const uint32_t &node_number)
-            : node_pose_(node_pose_), node_number_(node_number)
+        PgNode(const pose_2d::Pose2Df &node_pose_, const uint32_t &node_number, std::vector<Eigen::Vector2f> point_cloud)
+            : node_pose_(node_pose_), node_number_(node_number), std::vector<Eigen::Vector2f> point_cloud(point_cloud)
         {
         }
 
