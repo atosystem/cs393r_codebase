@@ -86,7 +86,10 @@ namespace slam
                  prev_odom_angle_(0),
                  odom_initialized_(false),
                  first_scan(true),
-                 last_node_cumulative_dist_(0) {}
+                 last_node_cumulative_dist_(0) {
+                  graph_ = new NonlinearFactorGraph();
+                  isam_ = new ISAM2(); 
+                 }
 
   void SLAM::GetPose(Eigen::Vector2f *loc, float *angle) const
   {
@@ -150,7 +153,7 @@ namespace slam
                                                CONFIG_new_node_y_std,
                                                CONFIG_new_node_theta_std));
       graph_->add(PriorFactor<Pose2>(new_node.getNodeNumber(), init_pos, init_noise));
-
+      
       // odom_only_estimates_.emplace_back(std::make_pair(prev_odom_loc_, prev_odom_angle_));
       last_node_odom_pose_.Set(
         prev_odom_angle_,
