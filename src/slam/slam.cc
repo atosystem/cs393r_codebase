@@ -94,8 +94,16 @@ namespace slam
   void SLAM::GetPose(Eigen::Vector2f *loc, float *angle) const
   {
     // Return the latest pose estimate of the robot.
-    *loc = Vector2f(0, 0);
-    *angle = 0;
+    // *loc = Vector2f(0, 0);
+    // *angle = 0;
+    if (pg_nodes_.size() == 0) {
+      *loc = Vector2f(0, 0);
+      *angle = 0;
+    } else {
+      *angle = math_util::AngleMod(math_util::AngleDiff(prev_odom_angle_,  last_node_odom_pose_.angle) + pg_nodes_.back().getEstimatedPose().angle);
+      *loc = prev_odom_loc_ - last_node_odom_pose_.translation + pg_nodes_.back().getEstimatedPose().translation;
+    
+    }
   }
 
   void SLAM::ObserveLaser(const vector<float> &ranges,
