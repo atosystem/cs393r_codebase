@@ -152,13 +152,16 @@ namespace slam
           noiseModel::Diagonal::Sigmas(Vector3(CONFIG_new_node_x_std,
                                                CONFIG_new_node_y_std,
                                                CONFIG_new_node_theta_std));
-      graph_->add(PriorFactor<Pose2>(new_node.getNodeNumber(), init_pos, init_noise));
+      // Remove for testing                                         
+      // graph_->add(PriorFactor<Pose2>(new_node.getNodeNumber(), init_pos, init_noise));
       
       // odom_only_estimates_.emplace_back(std::make_pair(prev_odom_loc_, prev_odom_angle_));
       last_node_odom_pose_.Set(
         prev_odom_angle_,
         prev_odom_loc_
       );
+      // TODO: add a node without observation constraints
+      pg_nodes_.push_back(new_node);
 
     }
     else
@@ -189,7 +192,8 @@ namespace slam
         noiseModel::Diagonal::shared_ptr odometryNoise =
             noiseModel::Diagonal::Sigmas(Vector3(transl_std, transl_std, rot_std));
         Pose2 odometry_offset_est(rel_pos_to_last_node_odom_pose.translation.x(), rel_pos_to_last_node_odom_pose.translation.y(), rel_pos_to_last_node_odom_pose.angle);
-        graph_->add(BetweenFactor<Pose2>(pg_nodes_.back().getNodeNumber(), new_node.getNodeNumber(), odometry_offset_est, odometryNoise));
+        // Remove for testing
+        // graph_->add(BetweenFactor<Pose2>(pg_nodes_.back().getNodeNumber(), new_node.getNodeNumber(), odometry_offset_est, odometryNoise));
       }
 
       // odom_only_estimates_.emplace_back(std::make_pair(prev_odom_loc_, prev_odom_angle_));
@@ -197,7 +201,7 @@ namespace slam
         prev_odom_angle_,
         prev_odom_loc_
       );
-
+      
       // Add observation constraints
       updatePoseGraphObsConstraints(new_node);
     }
@@ -214,7 +218,8 @@ namespace slam
     Pose2 factor_translation(constraint_info.first.translation.x(), constraint_info.first.translation.y(), constraint_info.first.angle);
     noiseModel::Gaussian::shared_ptr factor_noise = noiseModel::Gaussian::Covariance(constraint_info.second);
     //        ROS_INFO_STREAM("Adding constraint from node " << from_node_num << " to node " << to_node_num <<" factor " << factor_transl.x() << ", " << factor_transl.y() << ", " << factor_transl.theta());
-    graph_->add(BetweenFactor<Pose2>(from_node_num, to_node_num, factor_translation, factor_noise));
+    // Remove for testing
+    // graph_->add(BetweenFactor<Pose2>(from_node_num, to_node_num, factor_translation, factor_noise));
   }
 
   void SLAM::ObserveOdometry(const Vector2f &odom_loc, const float odom_angle)
@@ -276,6 +281,8 @@ namespace slam
   }
 void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
   
+  ROS_INFO_STREAM("Updateing PoseGraphObsConstraints");
+  
   PgNode preceding_node = pg_nodes_.back();
 
   // Add laser factor for previous pose and this node
@@ -314,12 +321,14 @@ void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
   
   // TODO: should we put it in the beginning?
   pg_nodes_.push_back(new_node);
-
-  gtsam::Values init_estimate_for_new_node;
-  init_estimate_for_new_node.insert(new_node.getNodeNumber(), Pose2(new_node.getEstimatedPose().translation.x(),
-                                                                    new_node.getEstimatedPose().translation.y(),
-                                                                    new_node.getEstimatedPose().angle));
-  optimizePoseGraph(init_estimate_for_new_node);
+  
+  // Remove for testing =======================
+  // gtsam::Values init_estimate_for_new_node;
+  // init_estimate_for_new_node.insert(new_node.getNodeNumber(), Pose2(new_node.getEstimatedPose().translation.x(),
+  //                                                                   new_node.getEstimatedPose().translation.y(),
+  //                                                                   new_node.getEstimatedPose().angle));
+  // optimizePoseGraph(init_estimate_for_new_node);
+  // ==========================================
 
 }
 
