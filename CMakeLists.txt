@@ -28,7 +28,7 @@ SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 SET(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 
 SET(libs roslib roscpp rosbag glog gflags amrl-shared-lib boost_system lua5.1
-    pthread)
+    pthread X11)
 
 ADD_LIBRARY(shared_library
             src/visualization/visualization.cc
@@ -40,7 +40,8 @@ INCLUDE_DIRECTORIES(src)
 
 ROSBUILD_ADD_EXECUTABLE(slam
                         src/slam/slam_main.cc
-                        src/slam/slam.cc)
+                        src/slam/slam.cc
+                        src/slam/CorrelativeScanMatcher.cc)
 TARGET_LINK_LIBRARIES(slam shared_library ${libs})
 
 
