@@ -100,9 +100,13 @@ vector<Vector2f> SLAM::GetMap() {
 }
 
 void SLAM::ScanMatch(PgNode &base_node, PgNode &match_node,
-                     pair<Trans, Eigen::Matrix3f> &result) {
-  result = matcher.GetTransAndUncertainty(
-    base_node.getPointCloud(), match_node.getPointCloud());
+                     pair<pose_2d::Pose2Df, Eigen::Matrix3f> &result) {
+  pair<Trans, Eigen::Matrix3f> trans_and_uncertainty =
+    matcher.GetTransAndUncertainty(base_node.getPointCloud(), match_node.getPointCloud());
+  const Trans &trans = trans_and_uncertainty.first;
+
+  result.first = pose_2d::Pose2Df(trans.second, trans.first);
+  result.second = trans_and_uncertainty.second;
 }
 
 }  // namespace slam

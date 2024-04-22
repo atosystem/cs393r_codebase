@@ -25,6 +25,7 @@
 #include "eigen3/Eigen/Dense"
 #include "eigen3/Eigen/Geometry"
 
+#include "shared/math/poses_2d.h"
 #include "./CorrelativeScanMatcher.h"
 
 #ifndef SRC_SLAM_H_
@@ -68,7 +69,7 @@ class SLAM {
    *                              match_node w.r.t. base_node.
    */
   void ScanMatch(PgNode &base_node, PgNode &match_node,
-                 pair<Trans, Eigen::Matrix3f> &result);
+                 pair<pose_2d::Pose2Df, Eigen::Matrix3f> &result);
 
  private:
 
