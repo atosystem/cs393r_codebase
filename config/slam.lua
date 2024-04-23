@@ -18,3 +18,6 @@ new_node_theta_std = 1.0;
 non_successive_scan_constraints = true
 max_factors_per_node = 15
 maximum_node_dis_scan_comparison = 5.0
+initial_node_global_x = 10.0
+initial_node_global_y = 10.0
+initial_node_global_theta = 0.0
