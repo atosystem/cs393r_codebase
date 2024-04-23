@@ -48,14 +48,14 @@ using std::swap;
 using std::vector;
 using vector_map::VectorMap;
 
-CONFIG_DOUBLE(scanner_range, "scanner_range");
-CONFIG_DOUBLE(trans_range, "trans_range");
-CONFIG_DOUBLE(low_res, "low_res");
-CONFIG_DOUBLE(high_res, "high_res");
-CONFIG_DOUBLE(k1, "k1");
-CONFIG_DOUBLE(k2, "k2");
-CONFIG_DOUBLE(k3, "k3");
-CONFIG_DOUBLE(k4, "k4");
+double scanner_range = 30.0;
+double trans_range = 2.0;
+double low_res = 0.3;
+double high_res = 0.03;
+float k1 = 0.1;
+float k2 = 0.05;
+float k3 = 0.1;
+float k4 = 0.1;
 
 namespace slam {
 
@@ -64,9 +64,9 @@ SLAM::SLAM() :
     prev_odom_angle_(0),
     odom_initialized_(false),
     matcher(
-      CONFIG_scanner_range, CONFIG_trans_range,
-      CONFIG_low_res, CONFIG_high_res,
-      CONFIG_k1, CONFIG_k2, CONFIG_k3, CONFIG_k4) {}
+      scanner_range, trans_range,
+      low_res, high_res,
+      k1, k2, k3, k4) {}
 
 void SLAM::GetPose(Eigen::Vector2f* loc, float* angle) const {
   // Return the latest pose estimate of the robot.
