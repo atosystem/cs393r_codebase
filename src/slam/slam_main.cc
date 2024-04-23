@@ -108,7 +108,24 @@ void PublishMap()
   }
   visualization_publisher_.publish(vis_msg_);
 }
+void PublishTrajectory() {
+  
+  std::vector<slam::PgNode> pg_nodes_ = slam_.GetPgNodes();
+  for (size_t i = 0; i < pg_nodes_.size(); i++) {
+      
+      pose_2d::Pose2Df cur_point = pg_nodes_[i].getEstimatedPose();
+      visualization::DrawPoint(cur_point.translation, 0xFCBA03, vis_msg_);
 
+      // if (i != 0) {
+      //   visualization::DrawLine(pg_nodes_[i-1].getEstimatedPose().translation,
+      //                         pg_nodes_[i].getEstimatedPose().translation,
+      //                         0xAD03FC, vis_msg_);
+      // }
+
+  }
+
+  visualization_publisher_.publish(vis_msg_);
+}
 void PublishPose()
 {
   Vector2f robot_loc(0, 0);
@@ -136,6 +153,7 @@ void LaserCallback(const sensor_msgs::LaserScan &msg)
       msg.angle_max);
   PublishMap();
   PublishPose();
+  PublishTrajectory();
 }
 
 void OdometryCallback(const nav_msgs::Odometry &msg)

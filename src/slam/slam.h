@@ -62,7 +62,10 @@ namespace slam
     std::vector<Eigen::Vector2f> GetMap();
 
     // Get latest robot pose.
-    void GetPose(Eigen::Vector2f *loc, float *angle) const;
+    void GetPose(Eigen::Vector2f *loc, float *angle);
+
+    // Get pg_nodes
+    std::vector<PgNode> GetPgNodes() const;
 
     // === Pose Graph Functions === //
 
