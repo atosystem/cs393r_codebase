@@ -64,6 +64,7 @@ using visualization::DrawArc;
 using visualization::DrawPoint;
 using visualization::DrawLine;
 using visualization::DrawParticle;
+using visualization::DrawText;
 
 // Create command line arguements
 DEFINE_string(laser_topic, "/scan", "Name of ROS topic for LIDAR data");
@@ -106,11 +107,20 @@ void PublishParticles() {
   particle_filter_.GetParticles(&particles);
   for (const particle_filter::Particle& p : particles) {
     DrawParticle(p.loc, p.angle, vis_msg_);
+    // DrawText(
+    //   p.loc,
+    //   0x000000,
+    //   1,
+    //   std::to_string( round(p.weight * 100) / 100),
+    //   vis_msg_
+    // );
   }
 }
 
 void PublishPredictedScan() {
-  const uint32_t kColor = 0xd67d00;
+  // const uint32_t kColor = 0xd67d00;
+  // change to purple
+  const uint32_t kColor = 0x800080;
   Vector2f robot_loc(0, 0);
   float robot_angle(0);
   particle_filter_.GetLocation(&robot_loc, &robot_angle);
@@ -254,6 +264,7 @@ void SignalHandler(int) {
     printf("Force Exit.\n");
     exit(0);
   }
+  particle_filter_.Report();
   printf("Exiting.\n");
   run_ = false;
 }
@@ -273,6 +284,8 @@ int main(int argc, char** argv) {
       n.advertise<amrl_msgs::Localization2DMsg>("localization", 1);
   laser_publisher_ =
       n.advertise<sensor_msgs::LaserScan>("scan", 1);
+
+  particle_filter_.PrintConfigurations();
 
   ProcessLive(&n);
 

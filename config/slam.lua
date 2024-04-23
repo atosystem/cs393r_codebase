@@ -18,3 +18,18 @@ new_node_theta_std = 1.0;
 non_successive_scan_constraints = true
 max_factors_per_node = 15
 maximum_node_dis_scan_comparison = 5.0
+
+-- CSM Parameters --------------------------------
+scanner_range = 30.0;
+trans_range = 2.0;
+low_res = 0.3;
+high_res = 0.03;
+-- trans error from trans model
+k1 = 0.1;
+-- trans error from rotat model
+k2 = 0.05;
+-- rotat error from trans model
+k3 = 0.1;
+-- rotat error from rotat model
+k4 = 0.1;
+

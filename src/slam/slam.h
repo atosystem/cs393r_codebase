@@ -35,6 +35,9 @@
 #include "pg_node.h"
 #include "shared/math/poses_2d.h"
 
+#include "shared/math/poses_2d.h"
+#include "./CorrelativeScanMatcher.h"
+
 #ifndef SRC_SLAM_H_
 #define SRC_SLAM_H_
 
@@ -68,6 +71,19 @@ namespace slam
     std::vector<PgNode> GetPgNodes() const;
 
     // === Pose Graph Functions === //
+    /**
+     * Run Correlative Scan Matching on two sets of laser scans to estimate
+     * the relative transformation of two nodes.
+     *
+     * @param base_node[in]         Base node.
+     * @param match_node[in]        Match node.
+     * @param result[out]           Pair of estimated pose and covariance of
+     *                              match_node w.r.t. base_node.
+     */
+    void ScanMatch(PgNode &base_node, PgNode &match_node,
+                  pair<pose_2d::Pose2Df, Eigen::Matrix3f> &result);
+
+ 
 
     /**
      * @return true if the robot has moved far enough.
@@ -152,6 +168,7 @@ namespace slam
 
     std::vector<PgNode> pg_nodes_;
 
+    CorrelativeScanMatcher matcher;
 
   };
 } // namespace slam

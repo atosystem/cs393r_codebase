@@ -35,6 +35,7 @@
 #include "slam.h"
 
 #include "vector_map/vector_map.h"
+#include "config_reader/config_reader.h"
 
 #include "config_reader/config_reader.h"
 
@@ -56,6 +57,14 @@ using vector_map::VectorMap;
 // config from .lua file
 CONFIG_FLOAT(min_angle_diff_between_nodes, "min_angle_diff_between_nodes");
 CONFIG_FLOAT(min_trans_diff_between_nodes, "min_trans_diff_between_nodes");
+CONFIG_DOUBLE(scanner_range, "scanner_range");
+CONFIG_DOUBLE(trans_range, "trans_range");
+CONFIG_DOUBLE(low_res, "low_res");
+CONFIG_DOUBLE(high_res, "high_res");
+CONFIG_DOUBLE(k1, "k1");
+CONFIG_DOUBLE(k2, "k2");
+CONFIG_DOUBLE(k3, "k3");
+CONFIG_DOUBLE(k4, "k4");
 
 // PoseGraph Parameters
 CONFIG_BOOL(considerOdomConstraint, "considerOdomConstraint");
@@ -86,7 +95,12 @@ namespace slam
                  prev_odom_angle_(0),
                  odom_initialized_(false),
                  first_scan(true),
-                 last_node_cumulative_dist_(0) {
+                 last_node_cumulative_dist_(0) 
+                 matcher(
+                    CONFIG_scanner_range, CONFIG_trans_range,
+                    CONFIG_low_res, CONFIG_high_res,
+                    CONFIG_k1, CONFIG_k2, CONFIG_k3, CONFIG_k4)
+                {
                   graph_ = new NonlinearFactorGraph();
                   isam_ = new ISAM2(); 
                  }
@@ -316,7 +330,7 @@ void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
 
   // Add laser factor for previous pose and this node
   std::pair<pose_2d::Pose2Df, Eigen::MatrixXd> successive_scan_offset;
-  runCSM(preceding_node, new_node, successive_scan_offset); 
+  ScanMatch(preceding_node, new_node, successive_scan_offset); 
   // build edge of observation constraint
   addObservationConstraint(preceding_node.getNodeNumber(), new_node.getNodeNumber(), successive_scan_offset);
 
@@ -339,7 +353,7 @@ void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
         
         if (node_dist <= CONFIG_maximum_node_dis_scan_comparison) {
             std::pair<pose_2d::Pose2Df, Eigen::MatrixXd> non_successive_scan_offset;
-            runCSM(node, preceding_node, non_successive_scan_offset);
+            ScanMatch(node, preceding_node, non_successive_scan_offset);
             // build edge of observation constraint
             addObservationConstraint(node.getNodeNumber(), preceding_node.getNodeNumber(),
                                       non_successive_scan_offset);
@@ -392,8 +406,6 @@ vector<Eigen::Vector2f> SLAM::GetMap() {
   return map;
 }
 
-
-
   // Utility functions
   // trasfrom a 2D pose from src frame to map frame
   pose_2d::Pose2Df SLAM::transformPoseFromSrc2Map(const pose_2d::Pose2Df & pose_rel_src_frame, const pose_2d::Pose2Df & src_frame_pose_rel_map_frame) {
@@ -423,4 +435,21 @@ vector<Eigen::Vector2f> SLAM::GetMap() {
         return pose_2d::Pose2Df(final_angle,final_trans);
     }
 
-} // namespace slam
+void SLAM::ScanMatch(PgNode &base_node, PgNode &match_node,
+                     pair<pose_2d::Pose2Df, Eigen::Matrix3f> &result) {
+  // Calculate initial guess of the relative pose from odometry.
+  const pose_2d::Pose2Df &base_pose = base_node.getPose();
+  const pose_2d::Pose2Df &match_pose = match_node.getPose();
+  const Trans odom(
+    match_pose.translation - base_pose.translation,
+    AngleDiff(match_pose.angle, base_pose.angle));
+
+  // Run the scan matcher to get the relative pose and uncertainty.
+  const pair<Trans, Eigen::Matrix3f> trans_and_uncertainty =
+    matcher.GetTransAndUncertainty(base_node.getPointCloud(), match_node.getPointCloud(), odom);
+  const Trans &trans = trans_and_uncertainty.first;
+  result.first = pose_2d::Pose2Df(trans.second, trans.first);
+  result.second = trans_and_uncertainty.second;
+}
+
+}  // namespace slam

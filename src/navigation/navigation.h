@@ -21,7 +21,8 @@
 
 #include <vector>
 #include <deque>
-
+#include <unordered_map>
+#include <queue>
 #include "eigen3/Eigen/Dense"
 
 #include "vector_map/vector_map.h"
@@ -33,7 +34,7 @@
 #define CAR_WIDTH 0.281
 #define CAR_BASE 0.324
 #define CAR_CMAX 1
-#define SAFETY_MARGIN 0.03
+#define SAFETY_MARGIN 0.07
 
 // heuristic 
 #define PENALTY_CURVE  2
@@ -67,6 +68,59 @@ struct Control {
   float velocity;
 };
 
+struct GridLocation {
+  int x;
+  int y;
+  GridLocation(int x,int y): x(x),y(y) {}
+  // Default constructor
+  GridLocation() : x(0), y(0) {}
+  
+  GridLocation operator-(const GridLocation& other) {
+      x = x - other.x;
+      y = y - other.y;
+      return *this;
+  }
+
+  bool operator==(const GridLocation& other) const {
+        return x == other.x && y == other.y;
+  }
+
+  bool operator!=(const GridLocation& other) const {
+      return !(*this == other);
+  }
+
+  // Comparison operator for < (This is dummy for PriorityQueue)
+  bool operator<(const GridLocation& other) const {
+      if (x < other.x)
+          return true;
+      if (x > other.x)
+          return false;
+      return y < other.y;
+  }
+};
+
+// implement a Priority Queue with re-prioritize option 
+template<typename T, typename priority_t>
+struct PriorityQueue {
+  typedef std::pair<priority_t, T> PQElement;
+  std::priority_queue<PQElement, std::vector<PQElement>,
+                 std::greater<PQElement>> elements;
+
+  inline bool empty() const {
+     return elements.empty();
+  }
+
+  inline void put(T item, priority_t priority) {
+    elements.emplace(priority, item);
+  }
+
+  T get() {
+    T best_item = elements.top().second;
+    elements.pop();
+    return best_item;
+  }
+};
+
 class Navigation {
  public:
 
@@ -91,11 +145,12 @@ class Navigation {
   // Used to set the next target pose.
   void SetNavGoal(const Eigen::Vector2f& loc, float angle);
 
-  void RunAssign1();
+  void ObstacleAvoidance();
 
-  PathOption ChoosePath(const vector<float> &curvatures);
+  PathOption ChoosePath(const vector<float> &candidate_curvs, const Eigen::Vector2f &goal);
 
-  float ComputeFreePathLength(float curvature);
+  float ComputeFreePathLength(float curvature, const Eigen::Vector2f &goal, Eigen::Vector2f &endpoint);
+
   float ComputeClearance(float free_path_len, float curv);
  
   float LatencyCompensation(size_t queue_size = 3);
@@ -109,11 +164,21 @@ class Navigation {
   // Run sine wave velocity for calculating latency (peroid = T)
   void RunSineWave(float T);
 
+  // navigation
+  void GlobalPlanner(vector<Eigen::Vector2f> &path);
+
+  void LocalPlanner();
+
+  bool CheckNavComplete();
+
   // for testing
   // visualization
   void drawCar(bool withMargin);
 
   void drawPointCloud();
+
+  void drawGraph();
+
  private:
 
   // Whether odometry has been initialized.
@@ -153,12 +218,65 @@ class Navigation {
 
   // Configuration
   static constexpr float dt = 0.05f;
-  static constexpr float max_speed = 1.0f;
+  static constexpr float max_speed = 0.5f;
   static constexpr float max_curvature = 1.f / 0.98f;
   static constexpr float max_acceleration = 4.f;
   
   // Control queue for latency compensation
   std::deque<Control> control_queue;
+
+  Eigen::Vector2f intermediate_goal;
+
+};
+
+class MapGraph {
+  public:
+    MapGraph(const vector_map::VectorMap& );
+    
+    // check if the location is free of obstacle
+    bool isFree(const GridLocation&);
+
+    // convert a given point(map frame) to GridLocation
+    // a quantization is performed
+    GridLocation point2GridLoc(const Eigen::Vector2f&);
+
+    // convert GridLoc to coordinate in map frame
+    Eigen::Vector2f gridLoc2point(const GridLocation&);
+
+    // draw gridlines (dark blue), cross (dark blue) as obstacles
+    void drawObstacleGrid();
+    
+    // A* Search on a grid, return the found path
+    void aStarSearch(const GridLocation& start, 
+                          const GridLocation& goal, 
+                          vector<GridLocation>& path); 
+    
+    
+  private:  
+    // check if point _p is on line segment _p0->_p1
+    bool pointOnLineSegment(const GridLocation& _p, const GridLocation& _p0, const GridLocation& _p1 );
+    // backtrack from goal to the start, reconstruct the path 
+    void backtrackPath(const GridLocation& start, 
+                        const GridLocation& goal, 
+                        std::map<GridLocation, GridLocation>& came_from,
+                        vector<GridLocation>& path); 
+    
+    double getEdgeCost(const GridLocation& p1, const GridLocation& p2);
+    
+    double getHeuristic(const GridLocation& p1, const GridLocation& p2);
+    
+    vector<GridLocation> getNeighbors(GridLocation current);
+    
+    // true: obstacle, false: free
+    vector<vector<bool>> obstacle_grid;
+    int grid_num_x = 0;
+    int grid_num_y = 0;
+    float map_max_x = 0;
+    float map_min_x = 0;
+    float map_max_y = 0;
+    float map_min_y = 0;
+  
+
 };
 
 }  // namespace navigation
