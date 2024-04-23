@@ -41,8 +41,8 @@ INCLUDE_DIRECTORIES(src)
 ROSBUILD_ADD_EXECUTABLE(slam
                         src/slam/slam_main.cc
                         src/slam/slam.cc
-                        src/slam/CorrelativeScanMatcher.cc)
-TARGET_LINK_LIBRARIES(slam shared_library ${libs})
+                        src/slam/CorrelativeScanMatcher.cc src/slam/pg_node.cc)
+TARGET_LINK_LIBRARIES(slam shared_library ${libs} gtsam)
 
 
 ROSBUILD_ADD_EXECUTABLE(particle_filter
