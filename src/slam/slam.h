@@ -113,7 +113,7 @@ namespace slam
      *
      */
     void addObservationConstraint(const size_t &from_node_num, const size_t &to_node_num,
-                                  std::pair<pose_2d::Pose2Df, Eigen::MatrixXd> &constraint_info);
+                                  std::pair<pose_2d::Pose2Df, Eigen::Matrix3f> &constraint_info);
 
     /**
      * Optimize the pose graph and update the estimated poses in the nodes.

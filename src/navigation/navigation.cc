@@ -713,7 +713,7 @@ void Navigation::Run() {
   // Eventually, you will have to set the control values to issue drive commands:
   // drive_msg_.curvature = 0.0;
   // drive_msg_.velocity = 1.0;
-  RunAssign1();
+  // RunAssign1();
 
   // draw nav goal (violet)
   visualization::DrawCross(
