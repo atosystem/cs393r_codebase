@@ -74,6 +74,9 @@ CONFIG_FLOAT(new_node_theta_std,"new_node_theta_std");
 CONFIG_FLOAT(max_factors_per_node,"max_factors_per_node");
 CONFIG_FLOAT(maximum_node_dis_scan_comparison,"maximum_node_dis_scan_comparison");
 CONFIG_BOOL(non_successive_scan_constraints,"non_successive_scan_constraints");
+CONFIG_FLOAT(initial_node_global_x,"initial_node_global_x");
+CONFIG_FLOAT(initial_node_global_y,"initial_node_global_y");
+CONFIG_FLOAT(initial_node_global_theta,"initial_node_global_theta");
 
 
 // Motion Model Parameters
@@ -179,11 +182,11 @@ namespace slam
 
       // Add prior instead of odom
       // We set global frame as (0, 0, 0).
-      pose_2d::Pose2Df _pose(0.0, Vector2f(0.0, 0.0));
+      pose_2d::Pose2Df _pose(CONFIG_initial_node_global_theta, Vector2f(CONFIG_initial_node_global_x, CONFIG_initial_node_global_y));
       uint32_t node_number = pg_nodes_.size();
       PgNode new_node(_pose, node_number, recent_point_cloud_);
 
-      Pose2 init_pos(0.0, 0.0, 0.0);
+      Pose2 init_pos(CONFIG_initial_node_global_x, CONFIG_initial_node_global_y, CONFIG_initial_node_global_theta);
       noiseModel::Diagonal::shared_ptr init_noise =
           noiseModel::Diagonal::Sigmas(Vector3(CONFIG_new_node_x_std,
                                                CONFIG_new_node_y_std,
