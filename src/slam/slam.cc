@@ -331,6 +331,7 @@ void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
   // Add laser factor for previous pose and this node
   std::pair<pose_2d::Pose2Df, Eigen::Matrix3f> successive_scan_offset;
   ScanMatch(preceding_node, new_node, successive_scan_offset); 
+  std::cout<<"CSM Covariance ("<<preceding_node.getNodeNumber()<<","<<new_node.getNodeNumber()<<")"<<successive_scan_offset.second<<std::endl;
   // build edge of observation constraint
   addObservationConstraint(preceding_node.getNodeNumber(), new_node.getNodeNumber(), successive_scan_offset);
 
@@ -451,7 +452,13 @@ const pose_2d::Pose2Df &base_pose = base_node.getEstimatedPose();
   // result.first = pose_2d::Pose2Df(trans.second, trans.first);
   // result.second = trans_and_uncertainty.second;
 
-  result = std::make_pair(pose_2d::Pose2Df(trans.second, trans.first), trans_and_uncertainty.second);
+  // TODO: debug covariance problem
+  Eigen::Matrix3f est_cov;
+      est_cov << 1.0, 0, 0,
+              0, 1.0, 0,
+              0, 0, 1.0;
+
+  result = std::make_pair(pose_2d::Pose2Df(trans.second, trans.first), est_cov);
 }
 
 }  // namespace slam
