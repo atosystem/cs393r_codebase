@@ -6,7 +6,7 @@ MESSAGE(STATUS "Using compiler: ${CMAKE_CXX_COMPILER}")
 MESSAGE(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
 MESSAGE(STATUS "Arch: ${CMAKE_SYSTEM_PROCESSOR}")
 
-SET(CMAKE_CXX_FLAGS "-std=c++11 -Wall -Werror")
+SET(CMAKE_CXX_FLAGS "-std=c++17 -Wall -Werror")
 
 IF(${CMAKE_BUILD_TYPE} MATCHES "Release")
   MESSAGE(STATUS "Additional Flags for Release mode")
@@ -42,7 +42,7 @@ ROSBUILD_ADD_EXECUTABLE(slam
                         src/slam/slam_main.cc
                         src/slam/slam.cc
                         src/slam/CorrelativeScanMatcher.cc src/slam/pg_node.cc)
-TARGET_LINK_LIBRARIES(slam shared_library ${libs} gtsam)
+TARGET_LINK_LIBRARIES(slam shared_library ${libs} gtsam tbb)
 
 
 ROSBUILD_ADD_EXECUTABLE(particle_filter
