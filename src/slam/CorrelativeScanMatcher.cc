@@ -401,7 +401,9 @@ pair<Trans, Eigen::Matrix3f> CorrelativeScanMatcher::GetTransAndUncertainty(
   const vector<TransProb> low_res_costs =
       MemoizeLowRes(pointcloud_a, pointcloud_b_cost_low_res, low_res_,
                     trans_range_, 0, 2 * M_PI);
-  for (double rotation = 0; rotation < 2 * M_PI; rotation += M_PI / 180) {
+#pragma omp parallel for
+  for (int i = 0; i < 360; i++) {
+    double rotation = i * M_PI / 180;
     // Rotate the pointcloud by this rotation.
     const vector<Vector2f> rotated_pointcloud_a =
         RotatePointcloud(pointcloud_a, rotation);
@@ -425,9 +427,12 @@ pair<Trans, Eigen::Matrix3f> CorrelativeScanMatcher::GetTransAndUncertainty(
         // cost += EvaluateMotionModel(trans, odom);
         cost = exp(cost);
         Eigen::Vector3f x(x_trans, y_trans, rotation);
-        K += x * x.transpose() * cost;
-        u += x * cost;
-        s += cost;
+        #pragma omp critical
+        {
+          K += x * x.transpose() * cost;
+          u += x * cost;
+          s += cost;
+        }
       }
     }
   }
