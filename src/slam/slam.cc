@@ -85,8 +85,8 @@ CONFIG_FLOAT(motion_model_trans_err_from_rot,"motion_model_trans_err_from_rot");
 CONFIG_FLOAT(motion_model_rot_err_from_trans,"motion_model_rot_err_from_trans");
 CONFIG_FLOAT(motion_model_rot_err_from_rot,"motion_model_rot_err_from_rot");
 
-// GTSAM Debug
-#define USE_GTSAM 
+// SLAM online
+CONFIG_BOOL(runOnline, "runOnline");
 
 
 
@@ -204,12 +204,15 @@ namespace slam
       // TODO: add a node without observation constraints
       pg_nodes_.push_back(new_node);
      
-      gtsam::Values init_estimate_for_new_node;
-      init_estimate_for_new_node.insert(new_node.getNodeNumber(), Pose2(new_node.getEstimatedPose().translation.x(),
-                                                                        new_node.getEstimatedPose().translation.y(),
-                                                                        new_node.getEstimatedPose().angle));
-      optimizePoseGraph(init_estimate_for_new_node);
-    
+      if (CONFIG_runOnline) {
+
+        gtsam::Values init_estimate_for_new_node;
+        init_estimate_for_new_node.insert(new_node.getNodeNumber(), Pose2(new_node.getEstimatedPose().translation.x(),
+                                                                          new_node.getEstimatedPose().translation.y(),
+                                                                          new_node.getEstimatedPose().angle));
+        optimizePoseGraph(init_estimate_for_new_node);
+      }
+      
 
     }
     else
@@ -375,18 +378,43 @@ void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
   // TODO: should we put it in the beginning?
   pg_nodes_.push_back(new_node);
   
-  gtsam::Values init_estimate_for_new_node;
-  init_estimate_for_new_node.insert(new_node.getNodeNumber(), Pose2(new_node.getEstimatedPose().translation.x(),
-                                                                    new_node.getEstimatedPose().translation.y(),
-                                                                    new_node.getEstimatedPose().angle));
-  optimizePoseGraph(init_estimate_for_new_node);
+  if (CONFIG_runOnline) {
+    gtsam::Values init_estimate_for_new_node;
+    init_estimate_for_new_node.insert(new_node.getNodeNumber(), Pose2(new_node.getEstimatedPose().translation.x(),
+                                                                      new_node.getEstimatedPose().translation.y(),
+                                                                      new_node.getEstimatedPose().angle));
+    optimizePoseGraph(init_estimate_for_new_node);
+
+  }
 
 }
 
+void SLAM::offlineOptimizePoseGraph() {
+  
+  // Insert all nodes with initial values
+  gtsam::Values init_estimate_for_all_nodes;
+  
+  for (PgNode &pg_node : pg_nodes_) {
+    init_estimate_for_all_nodes.insert(pg_node.getNodeNumber(), Pose2(pg_node.getEstimatedPose().translation.x(),
+                                                                    pg_node.getEstimatedPose().translation.y(),
+                                                                    pg_node.getEstimatedPose().angle));
+  }
+  
+  // isam calculation 
+  isam_->update(*graph_, init_estimate_for_all_nodes);
+  Values result = isam_->calculateEstimate();
+
+  // update each node in the graph using the optimized values
+  for (PgNode &pg_node : pg_nodes_) {
+
+      // Node number is the key, so we'll access the results using that
+      Pose2 estimated_pose = result.at<Pose2>(pg_node.getNodeNumber());
+      pg_node.setPose(Vector2f(estimated_pose.x(), estimated_pose.y()), estimated_pose.theta());
+  }
+}
 void SLAM::optimizePoseGraph(gtsam::Values &new_node_init_estimates) {
   // Optimize the trajectory and update the nodes' position estimates
   // TODO do we need other params here?
-  #ifdef USE_GTSAM
   isam_->update(*graph_, new_node_init_estimates);
   Values result = isam_->calculateEstimate();
 
@@ -398,7 +426,6 @@ void SLAM::optimizePoseGraph(gtsam::Values &new_node_init_estimates) {
       Pose2 estimated_pose = result.at<Pose2>(pg_node.getNodeNumber());
       pg_node.setPose(Vector2f(estimated_pose.x(), estimated_pose.y()), estimated_pose.theta());
   }
-  #endif
 }
 
 

@@ -4,7 +4,7 @@ min_trans_diff_between_nodes = 1;
 min_angle_diff_between_nodes = 3.14 / 6.0;
 
 -- Motion Model --------------------------------
--- this part is moved to slam.cc
+-- this is for odometry constraints
 -- motion_model_trans_err_from_trans = 0.4;
 -- motion_model_trans_err_from_rot = 0.4;
 -- motion_model_rot_err_from_trans = 0.4;
@@ -22,3 +22,6 @@ maximum_node_dis_scan_comparison = 5.0
 initial_node_global_x = -26
 initial_node_global_y = 8
 initial_node_global_theta = 0.0
+
+runOnline = false
+runOffline = false
