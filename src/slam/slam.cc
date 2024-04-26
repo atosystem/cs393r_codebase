@@ -85,6 +85,8 @@ CONFIG_FLOAT(motion_model_trans_err_from_rot,"motion_model_trans_err_from_rot");
 CONFIG_FLOAT(motion_model_rot_err_from_trans,"motion_model_rot_err_from_trans");
 CONFIG_FLOAT(motion_model_rot_err_from_rot,"motion_model_rot_err_from_rot");
 
+// GTSAM Debug
+// #define USE_GTSAM false
 
 
 
@@ -201,11 +203,13 @@ namespace slam
       
       // TODO: add a node without observation constraints
       pg_nodes_.push_back(new_node);
+     
       gtsam::Values init_estimate_for_new_node;
       init_estimate_for_new_node.insert(new_node.getNodeNumber(), Pose2(new_node.getEstimatedPose().translation.x(),
                                                                         new_node.getEstimatedPose().translation.y(),
                                                                         new_node.getEstimatedPose().angle));
       optimizePoseGraph(init_estimate_for_new_node);
+    
 
     }
     else
@@ -380,9 +384,11 @@ void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
 void SLAM::optimizePoseGraph(gtsam::Values &new_node_init_estimates) {
   // Optimize the trajectory and update the nodes' position estimates
   // TODO do we need other params here?
+  #ifdef USE_GTSAM
   isam_->update(*graph_, new_node_init_estimates);
   Values result = isam_->calculateEstimate();
 
+  
   // update each node int the graph using the optimized values
   for (PgNode &pg_node : pg_nodes_) {
 
@@ -390,6 +396,7 @@ void SLAM::optimizePoseGraph(gtsam::Values &new_node_init_estimates) {
       Pose2 estimated_pose = result.at<Pose2>(pg_node.getNodeNumber());
       pg_node.setPose(Vector2f(estimated_pose.x(), estimated_pose.y()), estimated_pose.theta());
   }
+  #endif
 }
 
 
@@ -412,6 +419,7 @@ vector<Eigen::Vector2f> SLAM::GetMap() {
 
   // Utility functions
   // trasfrom a 2D pose from src frame to map frame
+  // Get M(i, global) = M(i, i-1) * M(i-1, global)
   pose_2d::Pose2Df SLAM::transformPoseFromSrc2Map(const pose_2d::Pose2Df & pose_rel_src_frame, const pose_2d::Pose2Df & src_frame_pose_rel_map_frame) {
       // Rotate the point first
       Eigen::Rotation2Df rotation_mat(src_frame_pose_rel_map_frame.angle);
@@ -425,35 +433,39 @@ vector<Eigen::Vector2f> SLAM::GetMap() {
 
   }
 
-    // trasfrom a 2D pose from map frame to target frame
-    pose_2d::Pose2Df SLAM::transformPoseFromMap2Target(const pose_2d::Pose2Df & pose_rel_map_frame, const pose_2d::Pose2Df & target_frame_pose_rel_map_frame) {
-        // Translate the point
-        Eigen::Vector2f trans = pose_rel_map_frame.translation - target_frame_pose_rel_map_frame.translation;
+  // trasfrom a 2D pose from map frame to target frame
+  // Get M(i, i-1) = M(i, global) * M(i-1, global)^-1
+  pose_2d::Pose2Df SLAM::transformPoseFromMap2Target(const pose_2d::Pose2Df & pose_rel_map_frame, const pose_2d::Pose2Df & target_frame_pose_rel_map_frame) {
+      // Translate the point
+      Eigen::Vector2f trans = pose_rel_map_frame.translation - target_frame_pose_rel_map_frame.translation;
 
-        // Then rotate
-        Eigen::Rotation2Df rot_mat(-target_frame_pose_rel_map_frame.angle);
-        Eigen::Vector2f final_trans = rot_mat * trans;
+      // Then rotate
+      Eigen::Rotation2Df rot_mat(-target_frame_pose_rel_map_frame.angle);
+      Eigen::Vector2f final_trans = rot_mat * trans;
 
-        float final_angle = AngleMod(pose_rel_map_frame.angle - target_frame_pose_rel_map_frame.angle);
+      float final_angle = AngleMod(pose_rel_map_frame.angle - target_frame_pose_rel_map_frame.angle);
 
-        return pose_2d::Pose2Df(final_angle,final_trans);
-    }
+      return pose_2d::Pose2Df(final_angle,final_trans);
+  }
 
 void SLAM::ScanMatch(PgNode &base_node, PgNode &match_node,
                      pair<pose_2d::Pose2Df, Eigen::Matrix3f> &result) {
   // Calculate initial guess of the relative pose from odometry.
-const pose_2d::Pose2Df &base_pose = base_node.getEstimatedPose();
+  const pose_2d::Pose2Df &base_pose = base_node.getEstimatedPose();
   const pose_2d::Pose2Df &match_pose = match_node.getEstimatedPose();
+  pose_2d::Pose2Df odom_match_rel_base = transformPoseFromMap2Target(match_pose, base_pose);
   const Trans odom(
-    match_pose.translation - base_pose.translation,
-    AngleDiff(match_pose.angle, base_pose.angle));
+    odom_match_rel_base.translation,
+    odom_match_rel_base.angle);
 
   // Run the scan matcher to get the relative pose and uncertainty.
+  // ---- Remove for debugging ----
   const pair<Trans, Eigen::Matrix3f> trans_and_uncertainty =
-    matcher.GetTransAndUncertainty(base_node.getPointCloud(), match_node.getPointCloud(), odom);
+    matcher.GetTransAndUncertainty(match_node.getPointCloud(),base_node.getPointCloud(), odom);
   const Trans &trans = trans_and_uncertainty.first;
   // result.first = pose_2d::Pose2Df(trans.second, trans.first);
   // result.second = trans_and_uncertainty.second;
+  // ---- Remove for debugging ----
 
   // TODO: debug covariance problem
   Eigen::Matrix3f est_cov;
@@ -462,6 +474,7 @@ const pose_2d::Pose2Df &base_pose = base_node.getEstimatedPose();
               0, 0, 1.0;
 
   result = std::make_pair(pose_2d::Pose2Df(trans.second, trans.first), est_cov);
+  // result = std::make_pair(odom_match_rel_base, est_cov);
 }
 
 }  // namespace slam

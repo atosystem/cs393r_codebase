@@ -5,6 +5,7 @@
 
 #include <boost/dynamic_bitset.hpp>
 #include "eigen3/Eigen/Dense"
+#include <iostream>
 
 #define UNCERTAINTY_USELESS_THRESHOLD log(1e-4)
 #define DEBUG false
@@ -403,6 +404,8 @@ pair<Trans, Eigen::Matrix3f> CorrelativeScanMatcher::GetTransAndUncertainty(
   printf("Calculating Uncertainty...\n");
   TransProb best;
   best.first = -INFINITY;
+
+  // 
   for (double rotation = 0; rotation < 2 * M_PI; rotation += M_PI / 180) {
     // Rotate the pointcloud by this rotation.
     const vector<Vector2f> rotated_pointcloud_a =
@@ -424,7 +427,9 @@ pair<Trans, Eigen::Matrix3f> CorrelativeScanMatcher::GetTransAndUncertainty(
                                          pointcloud_b_cost_high_res);
         }
         const Trans trans(Vector2f(x_trans, y_trans), rotation);
-        cost += EvaluateMotionModel(trans, odom);
+        // ---- Remove for debugging ----
+        // cost += EvaluateMotionModel(trans, odom);
+        // ---- Remove for debugging ----
         if (cost > best.first) {
           best.first = cost;
           best.second = trans;
@@ -441,6 +446,12 @@ pair<Trans, Eigen::Matrix3f> CorrelativeScanMatcher::GetTransAndUncertainty(
   // std::cout << "K: " << std::endl << K << std::endl;
   // std::cout << "u " << std::endl << u << std::endl;
   // std::cout << "s: " << std::endl << s << std::endl;
+  
+  // ---- Print for debugging ----
+  std::cout << "Current odom: " << odom.first << ", " << odom.second << "]" << std::endl;
+  std::cout << "Evalaute odom: " << best.second.first << ", " << best.second.second << " ,Cost: " << best.first << std::endl;
+  
+
   Eigen::Matrix3f uncertainty =
       (1.0 / s) * K - (1.0 / (s * s)) * u * u.transpose();
   return std::make_pair(best.second, uncertainty);
