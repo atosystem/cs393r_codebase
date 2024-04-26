@@ -89,6 +89,9 @@ CONFIG_FLOAT(motion_model_rot_err_from_rot,"motion_model_rot_err_from_rot");
 CONFIG_BOOL(runOnline, "runOnline");
 CONFIG_BOOL(runOffline, "runOffline");
 
+// Debugging ScanMatch 
+CONFIG_BOOL(fix_mean, "fix_mean");
+CONFIG_BOOL(fix_covariance, "fix_covariance");
 
 
 namespace slam
@@ -354,7 +357,7 @@ void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
   // build edge of observation constraint
   addObservationConstraint(preceding_node.getNodeNumber(), new_node.getNodeNumber(), successive_scan_offset);
 
-  // Add constraints for non-successive scans
+  // Add constraints for non-successive scans for preceding node
   if (CONFIG_non_successive_scan_constraints && pg_nodes_.size() > 2) {
       // TODO: specify skip_count and start_num
       int skip_count = 1;
@@ -509,8 +512,21 @@ void SLAM::ScanMatch(PgNode &base_node, PgNode &match_node,
   const pair<Trans, Eigen::Matrix3f> trans_and_uncertainty =
     matcher.GetTransAndUncertainty(match_node.getPointCloud(),base_node.getPointCloud(), odom);
   const Trans &trans = trans_and_uncertainty.first;
+  
   result.first = pose_2d::Pose2Df(trans.second, trans.first);
   result.second = trans_and_uncertainty.second;
+  
+  if (CONFIG_fix_mean) {
+    // --- Debugging: use odom as mean --------------------------------
+    result.first = odom_match_rel_base;
+   
+  } 
+  if (CONFIG_fix_covariance) {
+    // --- Debugging: use fix diagonal covariances --------------------
+    result.second << 1.0, 0, 0,
+                    0, 1.0, 0,
+                    0, 0, 1.0;
+  }
 }
 
 void SLAM::stop_frontend(){
