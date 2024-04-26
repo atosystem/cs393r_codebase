@@ -116,7 +116,7 @@ void PublishTrajectory() {
       // visualization::DrawPoint(cur_point.translation, 0xFCBA03, vis_msg_);
       visualization::DrawCross(cur_point.translation,0.5, 0xFCBA03, vis_msg_);
       // draw the number of node
-      visualization::DrawText(cur_point.translation, 0xFCBA03,0.5, std::to_string(i),  vis_msg_);
+      visualization::DrawText(cur_point.translation, 0xFCBA03,2, std::to_string(i),  vis_msg_);
 
       // if (i != 0) {
       //   visualization::DrawLine(pg_nodes_[i-1].getEstimatedPose().translation,
