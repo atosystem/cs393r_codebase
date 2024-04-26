@@ -123,6 +123,8 @@ namespace slam
      */
     void optimizePoseGraph(gtsam::Values &new_node_init_estimates);
 
+    void offlineOptimizePoseGraph();
+    
     /**
      * Run CSM on the measurements of the two nodes to get the estimated position of node 2 in the frame of node 1.
      *

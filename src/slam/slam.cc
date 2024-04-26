@@ -85,8 +85,8 @@ CONFIG_FLOAT(motion_model_trans_err_from_rot,"motion_model_trans_err_from_rot");
 CONFIG_FLOAT(motion_model_rot_err_from_trans,"motion_model_rot_err_from_trans");
 CONFIG_FLOAT(motion_model_rot_err_from_rot,"motion_model_rot_err_from_rot");
 
-// GTSAM Debug
-#define USE_GTSAM 
+// SLAM online
+CONFIG_BOOL(runOnline, "runOnline");
 
 
 
@@ -204,12 +204,15 @@ namespace slam
       // TODO: add a node without observation constraints
       pg_nodes_.push_back(new_node);
      
-      gtsam::Values init_estimate_for_new_node;
-      init_estimate_for_new_node.insert(new_node.getNodeNumber(), Pose2(new_node.getEstimatedPose().translation.x(),
-                                                                        new_node.getEstimatedPose().translation.y(),
-                                                                        new_node.getEstimatedPose().angle));
-      optimizePoseGraph(init_estimate_for_new_node);
-    
+      if (CONFIG_runOnline) {
+
+        gtsam::Values init_estimate_for_new_node;
+        init_estimate_for_new_node.insert(new_node.getNodeNumber(), Pose2(new_node.getEstimatedPose().translation.x(),
+                                                                          new_node.getEstimatedPose().translation.y(),
+                                                                          new_node.getEstimatedPose().angle));
+        optimizePoseGraph(init_estimate_for_new_node);
+      }
+      
 
     }
     else
@@ -375,18 +378,43 @@ void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
   // TODO: should we put it in the beginning?
   pg_nodes_.push_back(new_node);
   
-  gtsam::Values init_estimate_for_new_node;
-  init_estimate_for_new_node.insert(new_node.getNodeNumber(), Pose2(new_node.getEstimatedPose().translation.x(),
-                                                                    new_node.getEstimatedPose().translation.y(),
-                                                                    new_node.getEstimatedPose().angle));
-  optimizePoseGraph(init_estimate_for_new_node);
+  if (CONFIG_runOnline) {
+    gtsam::Values init_estimate_for_new_node;
+    init_estimate_for_new_node.insert(new_node.getNodeNumber(), Pose2(new_node.getEstimatedPose().translation.x(),
+                                                                      new_node.getEstimatedPose().translation.y(),
+                                                                      new_node.getEstimatedPose().angle));
+    optimizePoseGraph(init_estimate_for_new_node);
+
+  }
 
 }
 
+void SLAM::offlineOptimizePoseGraph() {
+  
+  // Insert all nodes with initial values
+  gtsam::Values init_estimate_for_all_nodes;
+  
+  for (PgNode &pg_node : pg_nodes_) {
+    init_estimate_for_all_nodes.insert(pg_node.getNodeNumber(), Pose2(pg_node.getEstimatedPose().translation.x(),
+                                                                    pg_node.getEstimatedPose().translation.y(),
+                                                                    pg_node.getEstimatedPose().angle));
+  }
+  
+  // isam calculation 
+  isam_->update(*graph_, init_estimate_for_all_nodes);
+  Values result = isam_->calculateEstimate();
+
+  // update each node in the graph using the optimized values
+  for (PgNode &pg_node : pg_nodes_) {
+
+      // Node number is the key, so we'll access the results using that
+      Pose2 estimated_pose = result.at<Pose2>(pg_node.getNodeNumber());
+      pg_node.setPose(Vector2f(estimated_pose.x(), estimated_pose.y()), estimated_pose.theta());
+  }
+}
 void SLAM::optimizePoseGraph(gtsam::Values &new_node_init_estimates) {
   // Optimize the trajectory and update the nodes' position estimates
   // TODO do we need other params here?
-  #ifdef USE_GTSAM
   isam_->update(*graph_, new_node_init_estimates);
   Values result = isam_->calculateEstimate();
 
@@ -398,7 +426,6 @@ void SLAM::optimizePoseGraph(gtsam::Values &new_node_init_estimates) {
       Pose2 estimated_pose = result.at<Pose2>(pg_node.getNodeNumber());
       pg_node.setPose(Vector2f(estimated_pose.x(), estimated_pose.y()), estimated_pose.theta());
   }
-  #endif
 }
 
 
@@ -453,7 +480,7 @@ vector<Eigen::Vector2f> SLAM::GetMap() {
 void SLAM::ScanMatch(PgNode &base_node, PgNode &match_node,
                      pair<pose_2d::Pose2Df, Eigen::Matrix3f> &result) {
   // Calculate initial guess of the relative pose from odometry.
-  ROS_INFO_STREAM("[ScanMatch] ("<<base_node.getNodeNumber()<<","<<match_node.getNodeNumber()<<")");
+  ROS_INFO_STREAM("[ScanMatch] nodes: (" << base_node.getNodeNumber() << ", " << match_node.getNodeNumber() << ")");
   const pose_2d::Pose2Df &base_pose = base_node.getEstimatedPose();
   const pose_2d::Pose2Df &match_pose = match_node.getEstimatedPose();
   pose_2d::Pose2Df odom_match_rel_base = transformPoseFromMap2Target(match_pose, base_pose);
@@ -462,22 +489,11 @@ void SLAM::ScanMatch(PgNode &base_node, PgNode &match_node,
     odom_match_rel_base.angle);
 
   // Run the scan matcher to get the relative pose and uncertainty.
-  // ---- Remove for debugging ----
   const pair<Trans, Eigen::Matrix3f> trans_and_uncertainty =
     matcher.GetTransAndUncertainty(match_node.getPointCloud(),base_node.getPointCloud(), odom);
   const Trans &trans = trans_and_uncertainty.first;
   result.first = pose_2d::Pose2Df(trans.second, trans.first);
   result.second = trans_and_uncertainty.second;
-  // ---- Remove for debugging ----
-
-  // TODO: debug covariance problem
-  // Eigen::Matrix3f est_cov;
-  //     est_cov << 1.0, 0, 0,
-  //             0, 1.0, 0,
-  //             0, 0, 1.0;
-
-  // result = std::make_pair(pose_2d::Pose2Df(trans.second, trans.first), est_cov);
-  // result = std::make_pair(odom_match_rel_base, est_cov);
 }
 
 }  // namespace slam
