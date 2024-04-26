@@ -244,6 +244,7 @@ int gtsam_test(int argc, char** argv) {
 
 void StopSlamCallback(const std_msgs::Empty &msg) {
     ROS_INFO_STREAM("StopSlam topic recieved!");
+    slam_.stop_frontend();
     stopSlamComplete_publisher_.publish(std_msgs::Empty());
 }
 

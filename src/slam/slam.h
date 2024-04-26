@@ -149,6 +149,9 @@ namespace slam
 
     pose_2d::Pose2Df transformPoseFromMap2Target(const pose_2d::Pose2Df & pose_rel_map_frame, 
                                             const pose_2d::Pose2Df & target_frame_pose_rel_map_frame);
+
+    // stop front end SLAM
+    void stop_frontend();
   private:
     // Previous odometry-reported locations.
     Eigen::Vector2f prev_odom_loc_;
@@ -172,6 +175,7 @@ namespace slam
 
     CorrelativeScanMatcher matcher;
 
+    bool stopSlamCmdRecv_;
   };
 } // namespace slam
 

@@ -87,7 +87,11 @@ CONFIG_FLOAT(motion_model_rot_err_from_rot,"motion_model_rot_err_from_rot");
 
 // SLAM online
 CONFIG_BOOL(runOnline, "runOnline");
+CONFIG_BOOL(runOffline, "runOffline");
 
+// Debugging ScanMatch 
+CONFIG_BOOL(fix_mean, "fix_mean");
+CONFIG_BOOL(fix_covariance, "fix_covariance");
 
 
 namespace slam
@@ -104,7 +108,8 @@ namespace slam
                  matcher(
                   scanner_range, trans_range,
                   low_res, high_res,
-                  k1, k2, k3, k4)
+                  k1, k2, k3, k4),
+                  stopSlamCmdRecv_(false)
                 {
                   graph_ = new NonlinearFactorGraph();
                   isam_ = new ISAM2(); 
@@ -150,13 +155,18 @@ namespace slam
     // for SLAM. If decided to add, align it to the scan from the last saved pose,
     // and save both the scan and the optimized pose.
 
-    if (shouldAddPgNode())
+    if (!stopSlamCmdRecv_ && shouldAddPgNode())
     {
       ROS_INFO_STREAM("Adding new node...");
       // convert recent lidar scan to recent_point_cloud_
       convertLidar2PointCloud(ranges, range_min, range_max, angle_min, angle_max);
       updatePoseGraph();
     }
+
+    if (stopSlamCmdRecv_ && CONFIG_runOffline) {
+      offlineOptimizePoseGraph();
+    }
+
   }
 
   bool SLAM::shouldAddPgNode()
@@ -347,7 +357,7 @@ void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
   // build edge of observation constraint
   addObservationConstraint(preceding_node.getNodeNumber(), new_node.getNodeNumber(), successive_scan_offset);
 
-  // Add constraints for non-successive scans
+  // Add constraints for non-successive scans for preceding node
   if (CONFIG_non_successive_scan_constraints && pg_nodes_.size() > 2) {
       // TODO: specify skip_count and start_num
       int skip_count = 1;
@@ -390,7 +400,15 @@ void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
 }
 
 void SLAM::offlineOptimizePoseGraph() {
-  
+  // make sure that this function will only be called once
+  static bool run_before = false;
+
+  if (run_before) {
+    return;
+  }
+  // TODO: We cannot run online and offline together right now.
+  // Need to clear the graph and reconstruct the eddge constraints again and optimize it again.
+  ROS_INFO_STREAM("Running Offline Optimization...");
   // Insert all nodes with initial values
   gtsam::Values init_estimate_for_all_nodes;
   
@@ -411,6 +429,8 @@ void SLAM::offlineOptimizePoseGraph() {
       Pose2 estimated_pose = result.at<Pose2>(pg_node.getNodeNumber());
       pg_node.setPose(Vector2f(estimated_pose.x(), estimated_pose.y()), estimated_pose.theta());
   }
+  ROS_INFO_STREAM("Done offline optimization");
+  run_before = true;
 }
 void SLAM::optimizePoseGraph(gtsam::Values &new_node_init_estimates) {
   // Optimize the trajectory and update the nodes' position estimates
@@ -492,8 +512,26 @@ void SLAM::ScanMatch(PgNode &base_node, PgNode &match_node,
   const pair<Trans, Eigen::Matrix3f> trans_and_uncertainty =
     matcher.GetTransAndUncertainty(match_node.getPointCloud(),base_node.getPointCloud(), odom);
   const Trans &trans = trans_and_uncertainty.first;
+  
   result.first = pose_2d::Pose2Df(trans.second, trans.first);
   result.second = trans_and_uncertainty.second;
+  
+  if (CONFIG_fix_mean) {
+    // --- Debugging: use odom as mean --------------------------------
+    result.first = odom_match_rel_base;
+   
+  } 
+  if (CONFIG_fix_covariance) {
+    // --- Debugging: use fix diagonal covariances --------------------
+    result.second << 1.0, 0, 0,
+                    0, 1.0, 0,
+                    0, 0, 1.0;
+  }
+}
+
+void SLAM::stop_frontend(){
+  stopSlamCmdRecv_ = true;
+  ROS_INFO_STREAM("runOnline="<<CONFIG_runOnline<<", runOffline="<<CONFIG_runOffline);
 }
 
 }  // namespace slam
