@@ -136,12 +136,20 @@ class CorrelativeScanMatcher {
       const double rotation_a,
       const double rotation_b,
       const double rotation_restriction);
+  TransProb GetTransformationWithMotion(
+      const vector<Vector2f>& pointcloud_a,
+      const vector<Vector2f>& pointcloud_b,
+      const Trans& odom);
   Eigen::Matrix3f GetUncertaintyMatrix(const vector<Vector2f>& pointcloud_a,
                                        const vector<Vector2f>& pointcloud_b);
   Eigen::Matrix2f GetUncertaintyMatrix(const vector<Vector2f>& pointcloud_a,
                                        const vector<Vector2f>& pointcloud_b,
                                        const double rotation);
-  pair<Trans, Eigen::Matrix3f> GetTransAndUncertainty(
+  Eigen::Matrix3f GetUncertaintyMatrixWithMotion(
+      const vector<Vector2f>& pointcloud_a,
+      const vector<Vector2f>& pointcloud_b,
+      const Trans& odom);
+  pair<Trans, Eigen::Matrix3f> GetTransAndUncertaintyWithMotion(
       const vector<Vector2f>& pointcloud_a,
       const vector<Vector2f>& pointcloud_b,
       const Trans& odom);
@@ -152,6 +160,7 @@ class CorrelativeScanMatcher {
       const vector<Vector2f> targetCloud);
   LookupTable GetLookupTableHighRes(const vector<Vector2f>& pointcloud);
   LookupTable GetLookupTableLowRes(const LookupTable& high_res_table);
+  double EvaluateMotionModel(const Trans &trans, const Trans &odom);
 
  private:
   LookupTable GetLookupTable(const vector<Vector2f>& pointcloud,
@@ -160,7 +169,10 @@ class CorrelativeScanMatcher {
       const vector<Vector2f>& pointcloud_a, const LookupTable& pointcloud_b_cost,
       double resolution, double x_min, double x_max, double y_min, double y_max,
       double rotation);
-  double EvaluateMotionModel(const Trans &trans, const Trans &odom);
+  TransProb GetProbAndTransformationWithMotion(
+      const vector<Vector2f>& pointcloud_a, const LookupTable& pointcloud_b_cost,
+      double resolution, double x_min, double x_max, double y_min, double y_max,
+      double rotation, const Trans &odom);
   double scanner_range_;
   double trans_range_;
   double low_res_;

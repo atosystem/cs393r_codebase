@@ -109,6 +109,47 @@ vector<TransProb> MemoizeLowRes(
   return low_res_costs;
 }
 
+vector<TransProb> MemoizeLowResWithMotion(
+    const vector<Vector2f>& query_scan, const LookupTable& low_res_table,
+    const double resolution, const double range,
+    const double restrict_rotation_min, const double restrict_rotation_max,
+    const Trans &odom, CorrelativeScanMatcher &matcher) {
+  vector<TransProb> low_res_costs(
+      low_res_table.AbsCoords(range, range) + 1,
+      std::make_pair(-INFINITY, std::make_pair(Vector2f(0, 0), 0)));
+
+  int num_rotations = (int) std::ceil((restrict_rotation_max - restrict_rotation_min) / M_PI * 180);
+  int num_translation = (int) std::ceil((2 * range - EPSILON) / resolution);
+
+#pragma omp parallel for
+  for (int i = 0; i < num_rotations; i++) {
+    double rotation = restrict_rotation_min + i * M_PI / 180;
+    // Rotate the pointcloud by this rotation.
+    const vector<Vector2f> rotated_query =
+        RotatePointcloud(query_scan, rotation);
+    for (int j = 0; j < num_translation; j++) {
+      double x_trans = j * resolution - range + EPSILON;
+      for (int k = 0; k < num_translation; k++) {
+        double y_trans = k * resolution - range + EPSILON;
+        // If this is a negligible amount of the total sum then just use the
+        // low res cost, don't worry about the high res cost.
+        Trans transformation = std::make_pair(Vector2f(x_trans, y_trans), rotation);
+        double low_res_cost = CalculatePointcloudCost(rotated_query, x_trans,
+                                                      y_trans, low_res_table);
+        low_res_cost += matcher.EvaluateMotionModel(transformation, odom);
+        TransProb trans_prob = std::make_pair(low_res_cost, transformation);
+        size_t abs_coord = low_res_table.AbsCoords(x_trans, y_trans);
+        #pragma omp critical
+        {
+          low_res_costs[abs_coord] =
+              std::max(low_res_costs[abs_coord], trans_prob, LessThanTransProb);
+        }
+      }
+    }
+  }
+  return low_res_costs;
+}
+
 TransProb CorrelativeScanMatcher::GetProbAndTransformation(
     const vector<Vector2f>& rotated_pointcloud_a,
     const LookupTable& pointcloud_b_cost, double resolution, double x_min,
@@ -127,6 +168,37 @@ TransProb CorrelativeScanMatcher::GetProbAndTransformation(
       if (probability > current_most_likely_prob) {
         current_most_likely_trans = Trans(Vector2f(x_trans, y_trans), rotation);
         current_most_likely_prob = probability;
+      }
+    }
+  }
+  return TransProb(current_most_likely_prob, current_most_likely_trans);
+}
+
+TransProb CorrelativeScanMatcher::GetProbAndTransformationWithMotion(
+    const vector<Vector2f>& rotated_pointcloud_a,
+    const LookupTable& pointcloud_b_cost, double resolution, double x_min,
+    double x_max, double y_min, double y_max, double rotation, const Trans &odom) {
+  Trans current_most_likely_trans = std::make_pair(Vector2f(x_min, y_min), rotation);
+  double current_most_likely_prob = -INFINITY;
+
+  int num_x_trans = (int) std::ceil((x_max - x_min - EPSILON) / resolution);
+  int num_y_trans = (int) std::ceil((y_max - y_min - EPSILON) / resolution);
+#pragma omp parallel for
+  for (int i = 0; i < num_x_trans; i++) {
+    double x_trans = x_min + EPSILON + i * resolution;
+    for (int j = 0; j < num_y_trans; j++) {
+      double y_trans = y_min + EPSILON + j * resolution;
+      // Otherwise, get the probability / cost of this scan.
+      double probability = CalculatePointcloudCost(
+          rotated_pointcloud_a, x_trans, y_trans, pointcloud_b_cost);
+      probability += EvaluateMotionModel(Trans(Vector2f(x_trans, y_trans), rotation), odom);
+      // If it is the best so far, keep track of it!
+      #pragma omp critical
+      {
+        if (probability > current_most_likely_prob) {
+          current_most_likely_trans = Trans(Vector2f(x_trans, y_trans), rotation);
+          current_most_likely_prob = probability;
+        }
       }
     }
   }
@@ -223,6 +295,66 @@ TransProb CorrelativeScanMatcher::GetTransformation(
            prob_and_trans_high_res.second.second,
            prob_and_trans_high_res.first);
 #endif
+
+    if (prob_and_trans_high_res.first > best_probability) {
+      // This is the new best and we should keep searching to make
+      // sure there is nothing better.
+      best_probability = prob_and_trans_high_res.first;
+      best_transformation = prob_and_trans_high_res.second;
+    }
+  }
+  return std::make_pair(best_probability, best_transformation);
+}
+
+TransProb CorrelativeScanMatcher::GetTransformationWithMotion(
+    const vector<Vector2f>& pointcloud_a,
+    const vector<Vector2f>& pointcloud_b,
+    const Trans& odom) {
+  double current_probability = 1.0;
+  double best_probability = -INFINITY;
+  Trans best_transformation;
+  const LookupTable pointcloud_b_cost_high_res =
+      GetLookupTableHighRes(pointcloud_b);
+  const LookupTable pointcloud_b_cost_low_res =
+      GetLookupTableLowRes(pointcloud_b_cost_high_res);
+  vector<TransProb> low_res_costs = MemoizeLowResWithMotion(pointcloud_a,
+                    pointcloud_b_cost_low_res, low_res_, trans_range_,
+                    0, 2 * M_PI, odom, *this);
+  while (current_probability >= best_probability) {
+    // Evaluate over the low_res lookup table.
+    std::vector<TransProb>::iterator max = std::max_element(
+      low_res_costs.begin(), low_res_costs.end(), LessThanTransProb);
+    // Exclude this scan so we never get it again.
+    auto prob_and_trans_low_res = *max;
+    max->first = -INFINITY;
+    current_probability = prob_and_trans_low_res.first;
+    if (current_probability < best_probability) {
+      break;
+    }
+    // double best_probability_low_res = best_prob_and_trans_low_res.first;
+    Vector2f best_translation_low_res = prob_and_trans_low_res.second.first;
+    double best_rotation_low_res = prob_and_trans_low_res.second.second;
+
+    auto rotated_pointcloud_a =
+        RotatePointcloud(pointcloud_a, prob_and_trans_low_res.second.second);
+
+    double x_min_high_res =
+        std::max(best_translation_low_res.cast<double>().x(), -trans_range_);
+    double x_max_high_res =
+        std::min(best_translation_low_res.x() + low_res_, trans_range_);
+    double y_min_high_res =
+        std::max(best_translation_low_res.cast<double>().y(), -trans_range_);
+    double y_max_high_res =
+        std::min(best_translation_low_res.y() + low_res_, trans_range_);
+
+    CHECK_LT(x_min_high_res, trans_range_);
+    CHECK_LT(y_min_high_res, trans_range_);
+    CHECK_GT(x_max_high_res, -trans_range_);
+    CHECK_GT(y_max_high_res, -trans_range_);
+    auto prob_and_trans_high_res = GetProbAndTransformationWithMotion(
+        rotated_pointcloud_a, pointcloud_b_cost_high_res, high_res_,
+        x_min_high_res, x_max_high_res, y_min_high_res, y_max_high_res,
+        best_rotation_low_res, odom);
 
     if (prob_and_trans_high_res.first > best_probability) {
       // This is the new best and we should keep searching to make
@@ -361,6 +493,69 @@ Eigen::Matrix2f CorrelativeScanMatcher::GetUncertaintyMatrix(
   return uncertainty;
 }
 
+Eigen::Matrix3f CorrelativeScanMatcher::GetUncertaintyMatrixWithMotion(
+    const vector<Vector2f>& pointcloud_a,
+    const vector<Vector2f>& pointcloud_b,
+    const Trans& odom) {
+  // Calculation Method taken from Realtime Correlative Scan Matching
+  // by Edward Olsen.
+  Eigen::Matrix3f K = Eigen::Matrix3f::Zero();
+  Eigen::Vector3f u(0, 0, 0);
+  double s = 0;
+  const LookupTable pointcloud_b_cost_high_res =
+      GetLookupTableHighRes(pointcloud_b);
+  const LookupTable pointcloud_b_cost_low_res =
+      GetLookupTableLowRes(pointcloud_b_cost_high_res);
+  const vector<TransProb> low_res_costs =
+      MemoizeLowResWithMotion(pointcloud_a, pointcloud_b_cost_low_res, low_res_,
+                    trans_range_, 0, 2 * M_PI, odom, *this);
+
+  int num_rotations = 360;
+  int num_translations = (int) std::ceil((trans_range_ * 2 - EPSILON) / low_res_);
+
+#pragma omp parallel for
+  for (int i = 0; i < num_rotations; i++) {
+    double rotation = i * M_PI / 180;
+    // Rotate the pointcloud by this rotation.
+    const vector<Vector2f> rotated_pointcloud_a =
+        RotatePointcloud(pointcloud_a, rotation);
+    for (int j = 0; j < num_translations; j++) {
+      double x_trans = j * low_res_ - trans_range_ + EPSILON;
+      for (int k = 0; k < num_translations; k++) {
+        double y_trans = k * low_res_ - trans_range_ + EPSILON;
+        // If this is a negligible amount of the total sum then just use the
+        // low res cost, don't worry about the high res cost.
+        size_t abs_coord =
+            pointcloud_b_cost_low_res.AbsCoords(x_trans, y_trans);
+        double low_res_cost = low_res_costs[abs_coord].first;
+        double cost = 0.0;
+        if (low_res_cost <= UNCERTAINTY_USELESS_THRESHOLD) {
+          cost = low_res_cost;
+        } else {
+          cost = CalculatePointcloudCost(rotated_pointcloud_a, x_trans, y_trans,
+                                         pointcloud_b_cost_high_res);
+          cost += EvaluateMotionModel(Trans(Vector2f(x_trans, y_trans), rotation), odom);
+        }
+        cost = exp(cost);
+        Eigen::Vector3f x(x_trans, y_trans, rotation);
+        #pragma omp critical
+        {
+          K += x * x.transpose() * cost;
+          u += x * cost;
+          s += cost;
+        }
+      }
+    }
+  }
+  // Calculate Uncertainty matrix.
+  // std::cout << "K: " << std::endl << K << std::endl;
+  // std::cout << "u " << std::endl << u << std::endl;
+  // std::cout << "s: " << std::endl << s << std::endl;
+  Eigen::Matrix3f uncertainty =
+      (1.0 / s) * K - (1.0 / (s * s)) * u * u.transpose();
+  return uncertainty;
+}
+
 std::pair<double, double> CorrelativeScanMatcher::GetLocalUncertaintyStats(
     const vector<vector<Vector2f>>& comparisonClouds,
     const vector<Vector2f> targetCloud) {
@@ -385,7 +580,7 @@ std::pair<double, double> CorrelativeScanMatcher::GetLocalUncertaintyStats(
   return std::make_pair(condition_avg, scale_avg);
 }
 
-pair<Trans, Eigen::Matrix3f> CorrelativeScanMatcher::GetTransAndUncertainty(
+pair<Trans, Eigen::Matrix3f> CorrelativeScanMatcher::GetTransAndUncertaintyWithMotion(
     const vector<Vector2f>& pointcloud_a,
     const vector<Vector2f>& pointcloud_b,
     const Trans& odom) {
@@ -399,18 +594,22 @@ pair<Trans, Eigen::Matrix3f> CorrelativeScanMatcher::GetTransAndUncertainty(
   const LookupTable pointcloud_b_cost_low_res =
       GetLookupTableLowRes(pointcloud_b_cost_high_res);
   const vector<TransProb> low_res_costs =
-      MemoizeLowRes(pointcloud_a, pointcloud_b_cost_low_res, low_res_,
-                    trans_range_, 0, 2 * M_PI);
+      MemoizeLowResWithMotion(pointcloud_a, pointcloud_b_cost_low_res, low_res_,
+                    trans_range_, 0, 2 * M_PI, odom, *this);
+
+  int num_rotations = 360;
+  int num_translations = std::ceil((trans_range_ * 2 - EPSILON) / low_res_);
+
 #pragma omp parallel for
-  for (int i = 0; i < 360; i++) {
+  for (int i = 0; i < num_rotations; i++) {
     double rotation = i * M_PI / 180;
     // Rotate the pointcloud by this rotation.
     const vector<Vector2f> rotated_pointcloud_a =
         RotatePointcloud(pointcloud_a, rotation);
-    for (double x_trans = -trans_range_ + EPSILON; x_trans < trans_range_;
-         x_trans += low_res_) {
-      for (double y_trans = -trans_range_ + EPSILON; y_trans < trans_range_;
-           y_trans += low_res_) {
+    for (int j = 0; j < num_translations; j++) {
+      double x_trans = j * low_res_ - trans_range_ + EPSILON;
+      for (int k = 0; k < num_translations; k++) {
+        double y_trans = k * low_res_ - trans_range_ + EPSILON;
         // If this is a negligible amount of the total sum then just use the
         // low res cost, don't worry about the high res cost.
         size_t abs_coord =
@@ -422,9 +621,8 @@ pair<Trans, Eigen::Matrix3f> CorrelativeScanMatcher::GetTransAndUncertainty(
         } else {
           cost = CalculatePointcloudCost(rotated_pointcloud_a, x_trans, y_trans,
                                          pointcloud_b_cost_high_res);
+          cost += EvaluateMotionModel(Trans(Vector2f(x_trans, y_trans), rotation), odom);
         }
-        const Trans trans(Vector2f(x_trans, y_trans), rotation);
-        // cost += EvaluateMotionModel(trans, odom);
         cost = exp(cost);
         Eigen::Vector3f x(x_trans, y_trans, rotation);
         #pragma omp critical
@@ -443,11 +641,6 @@ pair<Trans, Eigen::Matrix3f> CorrelativeScanMatcher::GetTransAndUncertainty(
   Trans trans = std::make_pair(Vector2f(u.x() / s, u.y() / s), u.z() / s);
   Eigen::Matrix3f uncertainty =
       (1.0 / s) * K - (1.0 / (s * s)) * u * u.transpose();
-
-  // ---- Print for debugging ----
-  std::cout << "Odometry: " << '(' << odom.first.x() << ", " << odom.first.y() << ", " << odom.second << ')' << std::endl;
-  std::cout << "Estimated: " << '(' << trans.first.x() << ", " << trans.first.y() << ", " << trans.second << ')' << std::endl;
-
   return std::make_pair(trans, uncertainty);
 }
 
