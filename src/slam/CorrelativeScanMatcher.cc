@@ -448,17 +448,17 @@ pair<Trans, Eigen::Matrix3f> CorrelativeScanMatcher::GetTransAndUncertainty(
 
 double CorrelativeScanMatcher::EvaluateMotionModel(
     const Trans &trans, const Trans &odom) {
-    const float x_trans = trans.first.x(),
-                y_trans = trans.first.y(),
-                rotation = trans.second,
-                odom_trans = odom.first.norm(),
-                odom_rot = std::fabs(odom.second);
+  const float x_trans = trans.first.x(),
+              y_trans = trans.first.y(),
+              rotation = trans.second,
+              odom_trans = odom.first.norm(),
+              odom_rot = std::fabs(odom.second);
 
-    const float trans_error = k1_ * odom_trans + k2_ * odom_rot,
-                  rot_error = k3_ * odom_trans + k4_ * odom_rot;
+  const float trans_error = k1_ * odom_trans + k2_ * odom_rot,
+                rot_error = k3_ * odom_trans + k4_ * odom_rot;
 
-    return (double) std::log(
-      ProbabilityDensityGaussian(x_trans, odom.first.x(), trans_error) *
-      ProbabilityDensityGaussian(y_trans, odom.first.y(), trans_error) *
-      ProbabilityDensityGaussian(rotation, odom.second, rot_error));
+  return (double) std::log(
+    ProbabilityDensityGaussian(x_trans, odom.first.x(), trans_error) *
+    ProbabilityDensityGaussian(y_trans, odom.first.y(), trans_error) *
+    ProbabilityDensityGaussian(rotation, odom.second, rot_error));
 }
