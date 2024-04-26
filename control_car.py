@@ -15,7 +15,7 @@ LEFT_CURV = 1
 RIGHT_CURV = -1
 
 if __name__ == "__main__":
-    msg.velocity = 0.1
+    msg.velocity = 0.5
     msg.curvature = 0
     rate = rospy.Rate(20)
 

@@ -101,12 +101,11 @@ void PublishMap()
   ClearVisualizationMsg(vis_msg_);
 
   const vector<Vector2f> map = slam_.GetMap();
-  printf("Map: %lu points\n", map.size());
+  // printf("Map: %lu points\n", map.size());
   for (const Vector2f &p : map)
   {
     visualization::DrawPoint(p, 0xC0C0C0, vis_msg_);
   }
-  visualization_publisher_.publish(vis_msg_);
 }
 void PublishTrajectory() {
   
@@ -114,7 +113,10 @@ void PublishTrajectory() {
   for (size_t i = 0; i < pg_nodes_.size(); i++) {
       
       pose_2d::Pose2Df cur_point = pg_nodes_[i].getEstimatedPose();
-      visualization::DrawPoint(cur_point.translation, 0xFCBA03, vis_msg_);
+      // visualization::DrawPoint(cur_point.translation, 0xFCBA03, vis_msg_);
+      visualization::DrawCross(cur_point.translation,0.5, 0xFCBA03, vis_msg_);
+      // draw the number of node
+      visualization::DrawText(cur_point.translation, 0xFCBA03,0.5, std::to_string(i),  vis_msg_);
 
       // if (i != 0) {
       //   visualization::DrawLine(pg_nodes_[i-1].getEstimatedPose().translation,
@@ -123,8 +125,6 @@ void PublishTrajectory() {
       // }
 
   }
-
-  visualization_publisher_.publish(vis_msg_);
 }
 void PublishPose()
 {
@@ -135,7 +135,10 @@ void PublishPose()
   localization_msg.pose.x = robot_loc.x();
   localization_msg.pose.y = robot_loc.y();
   localization_msg.pose.theta = robot_angle;
-  localization_publisher_.publish(localization_msg);
+  // Do not publish localization message. Draw it ourselves.
+  // localization_publisher_.publish(localization_msg);
+  // light green
+  visualization::DrawParticle(robot_loc, robot_angle, vis_msg_);
 }
 
 void LaserCallback(const sensor_msgs::LaserScan &msg)
@@ -154,6 +157,7 @@ void LaserCallback(const sensor_msgs::LaserScan &msg)
   PublishMap();
   PublishPose();
   PublishTrajectory();
+  visualization_publisher_.publish(vis_msg_);
 }
 
 void OdometryCallback(const nav_msgs::Odometry &msg)

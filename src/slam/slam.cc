@@ -86,7 +86,7 @@ CONFIG_FLOAT(motion_model_rot_err_from_trans,"motion_model_rot_err_from_trans");
 CONFIG_FLOAT(motion_model_rot_err_from_rot,"motion_model_rot_err_from_rot");
 
 // GTSAM Debug
-// #define USE_GTSAM false
+#define USE_GTSAM 
 
 
 
@@ -178,7 +178,7 @@ namespace slam
     // TODO: update pose graph.
     if (first_scan)
     {
-      ROS_INFO_STREAM("first scan");
+      ROS_INFO_STREAM("[Create Node] Id=0");
       first_scan = false;
       // first scan
 
@@ -215,6 +215,7 @@ namespace slam
     else
     {
       // not first scan
+      
 
       // Transform odomoetry pose from map frame to odometry frame. Get M(i, i-1) = M(i, odom) * M(i-1, odom)^-1
       // transform prev odom change from map frame to last node's frame
@@ -228,6 +229,7 @@ namespace slam
       // TODO: create new pgnode
      
       uint32_t node_number = pg_nodes_.size();
+      ROS_INFO_STREAM("[Create Node] Id="<<node_number);
       // TODO: not sure what frame to use here
       // PgNode new_node(rel_pos_to_last_node_odom_pose, node_number, recent_point_cloud_);
       PgNode new_node(pos_map, node_number, recent_point_cloud_);
@@ -331,14 +333,14 @@ namespace slam
   }
 void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
   
-  ROS_INFO_STREAM("Updateing PoseGraphObsConstraints");
+  ROS_INFO_STREAM("Updating PoseGraphObsConstraints");
   
   PgNode preceding_node = pg_nodes_.back();
 
   // Add laser factor for previous pose and this node
   std::pair<pose_2d::Pose2Df, Eigen::Matrix3f> successive_scan_offset;
   ScanMatch(preceding_node, new_node, successive_scan_offset); 
-  std::cout<<"CSM Covariance ("<<preceding_node.getNodeNumber()<<","<<new_node.getNodeNumber()<<")"<<successive_scan_offset.second<<std::endl;
+  // std::cout<<"CSM Covariance ("<<preceding_node.getNodeNumber()<<","<<new_node.getNodeNumber()<<")"<<successive_scan_offset.second<<std::endl;
   // build edge of observation constraint
   addObservationConstraint(preceding_node.getNodeNumber(), new_node.getNodeNumber(), successive_scan_offset);
 
@@ -451,6 +453,7 @@ vector<Eigen::Vector2f> SLAM::GetMap() {
 void SLAM::ScanMatch(PgNode &base_node, PgNode &match_node,
                      pair<pose_2d::Pose2Df, Eigen::Matrix3f> &result) {
   // Calculate initial guess of the relative pose from odometry.
+  ROS_INFO_STREAM("[ScanMatch] ("<<base_node.getNodeNumber()<<","<<match_node.getNodeNumber()<<")");
   const pose_2d::Pose2Df &base_pose = base_node.getEstimatedPose();
   const pose_2d::Pose2Df &match_pose = match_node.getEstimatedPose();
   pose_2d::Pose2Df odom_match_rel_base = transformPoseFromMap2Target(match_pose, base_pose);
@@ -463,17 +466,17 @@ void SLAM::ScanMatch(PgNode &base_node, PgNode &match_node,
   const pair<Trans, Eigen::Matrix3f> trans_and_uncertainty =
     matcher.GetTransAndUncertainty(match_node.getPointCloud(),base_node.getPointCloud(), odom);
   const Trans &trans = trans_and_uncertainty.first;
-  // result.first = pose_2d::Pose2Df(trans.second, trans.first);
-  // result.second = trans_and_uncertainty.second;
+  result.first = pose_2d::Pose2Df(trans.second, trans.first);
+  result.second = trans_and_uncertainty.second;
   // ---- Remove for debugging ----
 
   // TODO: debug covariance problem
-  Eigen::Matrix3f est_cov;
-      est_cov << 1.0, 0, 0,
-              0, 1.0, 0,
-              0, 0, 1.0;
+  // Eigen::Matrix3f est_cov;
+  //     est_cov << 1.0, 0, 0,
+  //             0, 1.0, 0,
+  //             0, 0, 1.0;
 
-  result = std::make_pair(pose_2d::Pose2Df(trans.second, trans.first), est_cov);
+  // result = std::make_pair(pose_2d::Pose2Df(trans.second, trans.first), est_cov);
   // result = std::make_pair(odom_match_rel_base, est_cov);
 }
 

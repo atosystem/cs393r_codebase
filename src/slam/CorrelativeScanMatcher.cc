@@ -401,7 +401,7 @@ pair<Trans, Eigen::Matrix3f> CorrelativeScanMatcher::GetTransAndUncertainty(
   const vector<TransProb> low_res_costs =
       MemoizeLowRes(pointcloud_a, pointcloud_b_cost_low_res, low_res_,
                     trans_range_, 0, 2 * M_PI);
-  printf("Calculating Uncertainty...\n");
+  // printf("Calculating Uncertainty...\n");
   TransProb best;
   best.first = -INFINITY;
 
@@ -448,28 +448,30 @@ pair<Trans, Eigen::Matrix3f> CorrelativeScanMatcher::GetTransAndUncertainty(
   // std::cout << "s: " << std::endl << s << std::endl;
   
   // ---- Print for debugging ----
-  std::cout << "Current odom: " << odom.first << ", " << odom.second << "]" << std::endl;
-  std::cout << "Evalaute odom: " << best.second.first << ", " << best.second.second << " ,Cost: " << best.first << std::endl;
+  std::cout << "Current odom: " << "("<< odom.first.x() <<","<<odom.first.y() << "," << odom.second << ")" << std::endl;
+  std::cout << "Evalaute odom: " << "("<< best.second.first.x() << ","<< best.second.first.y() << ", " << best.second.second << ") , Prob: " << exp(best.first) << std::endl;
   
-
+  Trans trans = std::make_pair(Vector2f(u.x() / s, u.y() / s), u.z() / s);
   Eigen::Matrix3f uncertainty =
       (1.0 / s) * K - (1.0 / (s * s)) * u * u.transpose();
-  return std::make_pair(best.second, uncertainty);
+  return std::make_pair(trans, uncertainty);
+  
+ 
 }
 
 double CorrelativeScanMatcher::EvaluateMotionModel(
     const Trans &trans, const Trans &odom) {
-  const float x_trans = trans.first.x(),
-              y_trans = trans.first.y(),
-              rotation = trans.second,
-              odom_trans = odom.first.norm(),
-              odom_rot = std::fabs(odom.second);
+    const float x_trans = trans.first.x(),
+                y_trans = trans.first.y(),
+                rotation = trans.second,
+                odom_trans = odom.first.norm(),
+                odom_rot = std::fabs(odom.second);
 
-  const float trans_error = k1_ * odom_trans + k2_ * odom_rot,
-                rot_error = k3_ * odom_trans + k4_ * odom_rot;
+    const float trans_error = k1_ * odom_trans + k2_ * odom_rot,
+                  rot_error = k3_ * odom_trans + k4_ * odom_rot;
 
-  return (double) std::log(
-    ProbabilityDensityGaussian(x_trans, 0.f, trans_error) *
-    ProbabilityDensityGaussian(y_trans, 0.f, trans_error) *
-    ProbabilityDensityGaussian(rotation, 0.f, rot_error));
+    return (double) std::log(
+      ProbabilityDensityGaussian(x_trans, odom.first.x(), trans_error) *
+      ProbabilityDensityGaussian(y_trans, odom.first.y(), trans_error) *
+      ProbabilityDensityGaussian(rotation, odom.second, rot_error));
 }
