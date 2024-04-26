@@ -50,6 +50,7 @@
 #include "slam.h"
 #include "vector_map/vector_map.h"
 #include "visualization/visualization.h"
+#include <std_msgs/Empty.h>
 
 using amrl_msgs::VisualizationMsg;
 using Eigen::Vector2f;
@@ -69,6 +70,7 @@ using visualization::DrawPoint;
 // Create command line arguements
 DEFINE_string(laser_topic, "/scan", "Name of ROS topic for LIDAR data");
 DEFINE_string(odom_topic, "/odom", "Name of ROS topic for odometry data");
+DEFINE_string(stop_slam_topic, "/stop_slam", "Name of ROS topic for stop slam");
 
 DECLARE_int32(v);
 
@@ -76,6 +78,7 @@ bool run_ = true;
 slam::SLAM slam_;
 ros::Publisher visualization_publisher_;
 ros::Publisher localization_publisher_;
+ros::Publisher stopSlamComplete_publisher_;
 VisualizationMsg vis_msg_;
 sensor_msgs::LaserScan last_laser_msg_;
 
@@ -239,6 +242,11 @@ int gtsam_test(int argc, char** argv) {
   return 0;
 }
 
+void StopSlamCallback(const std_msgs::Empty &msg) {
+    ROS_INFO_STREAM("StopSlam topic recieved!");
+    stopSlamComplete_publisher_.publish(std_msgs::Empty());
+}
+
 int main(int argc, char **argv)
 {
   google::ParseCommandLineFlags(&argc, &argv, false);
@@ -256,6 +264,8 @@ int main(int argc, char **argv)
       n.advertise<VisualizationMsg>("visualization", 1);
   localization_publisher_ =
       n.advertise<amrl_msgs::Localization2DMsg>("localization", 1);
+  stopSlamComplete_publisher_ =
+      n.advertise<std_msgs::Empty>("stopSlamComplete", 1);
 
   ros::Subscriber laser_sub = n.subscribe(
       FLAGS_laser_topic.c_str(),
@@ -265,6 +275,10 @@ int main(int argc, char **argv)
       FLAGS_odom_topic.c_str(),
       1,
       OdometryCallback);
+  ros::Subscriber stopSlam_sub = n.subscribe(
+          FLAGS_stop_slam_topic.c_str(),
+          1,
+          StopSlamCallback);
   ros::spin();
 
   return 0;
