@@ -453,7 +453,7 @@ vector<Eigen::Vector2f> SLAM::GetMap() {
 void SLAM::ScanMatch(PgNode &base_node, PgNode &match_node,
                      pair<pose_2d::Pose2Df, Eigen::Matrix3f> &result) {
   // Calculate initial guess of the relative pose from odometry.
-  ROS_INFO_STREAM("[ScanMatch] ("<<base_node.getNodeNumber()<<","<<match_node.getNodeNumber()<<")");
+  ROS_INFO_STREAM("[ScanMatch] nodes: (" << base_node.getNodeNumber() << ", " << match_node.getNodeNumber() << ")");
   const pose_2d::Pose2Df &base_pose = base_node.getEstimatedPose();
   const pose_2d::Pose2Df &match_pose = match_node.getEstimatedPose();
   pose_2d::Pose2Df odom_match_rel_base = transformPoseFromMap2Target(match_pose, base_pose);
@@ -462,22 +462,11 @@ void SLAM::ScanMatch(PgNode &base_node, PgNode &match_node,
     odom_match_rel_base.angle);
 
   // Run the scan matcher to get the relative pose and uncertainty.
-  // ---- Remove for debugging ----
   const pair<Trans, Eigen::Matrix3f> trans_and_uncertainty =
     matcher.GetTransAndUncertainty(match_node.getPointCloud(),base_node.getPointCloud(), odom);
   const Trans &trans = trans_and_uncertainty.first;
   result.first = pose_2d::Pose2Df(trans.second, trans.first);
   result.second = trans_and_uncertainty.second;
-  // ---- Remove for debugging ----
-
-  // TODO: debug covariance problem
-  // Eigen::Matrix3f est_cov;
-  //     est_cov << 1.0, 0, 0,
-  //             0, 1.0, 0,
-  //             0, 0, 1.0;
-
-  // result = std::make_pair(pose_2d::Pose2Df(trans.second, trans.first), est_cov);
-  // result = std::make_pair(odom_match_rel_base, est_cov);
 }
 
 }  // namespace slam
