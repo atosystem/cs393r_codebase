@@ -385,10 +385,11 @@ std::pair<double, double> CorrelativeScanMatcher::GetLocalUncertaintyStats(
   return std::make_pair(condition_avg, scale_avg);
 }
 
-pair<Trans, Eigen::Matrix3f> CorrelativeScanMatcher::GetTransAndUncertainty(
+bool CorrelativeScanMatcher::GetTransAndUncertainty(
     const vector<Vector2f>& pointcloud_a,
     const vector<Vector2f>& pointcloud_b,
-    const Trans& odom) {
+    const Trans& odom,
+    pair<Trans, Eigen::Matrix3f> &results) {
   // Calculation Method taken from Realtime Correlative Scan Matching
   // by Edward Olsen.
   Eigen::Matrix3f K = Eigen::Matrix3f::Zero();
@@ -463,7 +464,8 @@ pair<Trans, Eigen::Matrix3f> CorrelativeScanMatcher::GetTransAndUncertainty(
     fixed_uncertainty << 1.0, 0, 0,
                         0, 1.0, 0,
                         0, 0, 1.0;
-    return std::make_pair(trans, fixed_uncertainty);
+    results = std::make_pair(trans, fixed_uncertainty);
+    return false;
   }
   
 
@@ -477,7 +479,8 @@ pair<Trans, Eigen::Matrix3f> CorrelativeScanMatcher::GetTransAndUncertainty(
   std::cout << "Odometry: " << '(' << odom.first.x() << ", " << odom.first.y() << ", " << odom.second << ')' << std::endl;
   std::cout << "Estimated: " << '(' << trans.first.x() << ", " << trans.first.y() << ", " << trans.second << ')' << std::endl;
 
-  return std::make_pair(trans, uncertainty);
+  results =  std::make_pair(trans, uncertainty);
+  return true;
 }
 
 double CorrelativeScanMatcher::EvaluateMotionModel(

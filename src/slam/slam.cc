@@ -372,10 +372,14 @@ void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
 
   // Add laser factor for previous pose and this node
   std::pair<pose_2d::Pose2Df, Eigen::Matrix3f> successive_scan_offset;
-  ScanMatch(preceding_node, new_node, successive_scan_offset); 
-  // std::cout<<"CSM Covariance ("<<preceding_node.getNodeNumber()<<","<<new_node.getNodeNumber()<<")"<<successive_scan_offset.second<<std::endl;
-  // build edge of observation constraint
-  addObservationConstraint(preceding_node.getNodeNumber(), new_node.getNodeNumber(), successive_scan_offset);
+  
+  // Notice: if successive node is too far away, no observation constraint between them.
+  // if we want to add odometry constraint, need to turn on odometry constraint. 
+  if(ScanMatch(preceding_node, new_node, successive_scan_offset)) {
+    // std::cout<<"CSM Covariance ("<<preceding_node.getNodeNumber()<<","<<new_node.getNodeNumber()<<")"<<successive_scan_offset.second<<std::endl;
+    // build edge of observation constraint
+    addObservationConstraint(preceding_node.getNodeNumber(), new_node.getNodeNumber(), successive_scan_offset);
+  } 
 
   // Add constraints for non-successive scans for preceding node
   if (CONFIG_non_successive_scan_constraints && new_node.getNodeNumber() > 2) {
@@ -396,11 +400,12 @@ void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
         
         if (node_dist <= CONFIG_maximum_node_dis_scan_comparison) {
             std::pair<pose_2d::Pose2Df, Eigen::Matrix3f> non_successive_scan_offset;
-            ScanMatch(node, preceding_node, non_successive_scan_offset);
-            // build edge of observation constraint
-            addObservationConstraint(node.getNodeNumber(), preceding_node.getNodeNumber(),
-                                      non_successive_scan_offset);
-            num_added_factors++;
+            if(ScanMatch(node, preceding_node, non_successive_scan_offset)) {
+              // build edge of observation constraint
+              addObservationConstraint(node.getNodeNumber(), preceding_node.getNodeNumber(),
+                                        non_successive_scan_offset);
+              num_added_factors++;
+            }
         }
       }
     }
@@ -532,7 +537,7 @@ vector<Eigen::Vector2f> SLAM::GetMap() {
       return pose_2d::Pose2Df(final_angle,final_trans);
   }
 
-void SLAM::ScanMatch(PgNode &base_node, PgNode &match_node,
+bool SLAM::ScanMatch(PgNode &base_node, PgNode &match_node,
                      pair<pose_2d::Pose2Df, Eigen::Matrix3f> &result) {
   // Calculate initial guess of the relative pose from odometry.
   ROS_INFO_STREAM("[ScanMatch] nodes: (" << base_node.getNodeNumber() << ", " << match_node.getNodeNumber() << ")");
@@ -544,24 +549,31 @@ void SLAM::ScanMatch(PgNode &base_node, PgNode &match_node,
     odom_match_rel_base.angle);
 
   // Run the scan matcher to get the relative pose and uncertainty.
-  const pair<Trans, Eigen::Matrix3f> trans_and_uncertainty =
-    matcher.GetTransAndUncertainty(match_node.getPointCloud(),base_node.getPointCloud(), odom);
+  pair<Trans, Eigen::Matrix3f> trans_and_uncertainty;
+  bool converged = matcher.GetTransAndUncertainty(match_node.getPointCloud(),base_node.getPointCloud(), odom, trans_and_uncertainty);
+  // csm not converged, return false
+  if (!converged) return false;
+  
   const Trans &trans = trans_and_uncertainty.first;
   
   result.first = pose_2d::Pose2Df(trans.second, trans.first);
   result.second = trans_and_uncertainty.second;
   
+  // --- Debugging: use odom as mean --------------------------------
   if (CONFIG_fix_mean) {
-    // --- Debugging: use odom as mean --------------------------------
     result.first = odom_match_rel_base;
    
   } 
+
+  // --- Debugging: use fix diagonal covariances --------------------
   if (CONFIG_fix_covariance) {
-    // --- Debugging: use fix diagonal covariances --------------------
     result.second << 1.0, 0, 0,
                     0, 1.0, 0,
                     0, 0, 1.0;
   }
+
+  // csm converged, return true
+  return true;
 }
 
 void SLAM::stop_frontend(){

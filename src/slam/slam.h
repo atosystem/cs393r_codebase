@@ -79,8 +79,9 @@ namespace slam
      * @param match_node[in]        Match node.
      * @param result[out]           Pair of estimated pose and covariance of
      *                              match_node w.r.t. base_node.
+     * @return true if csm was successful, false otherwise.
      */
-    void ScanMatch(PgNode &base_node, PgNode &match_node,
+    bool ScanMatch(PgNode &base_node, PgNode &match_node,
                   pair<pose_2d::Pose2Df, Eigen::Matrix3f> &result);
 
  
