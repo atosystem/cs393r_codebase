@@ -199,12 +199,14 @@ namespace slam
       uint32_t node_number = pg_nodes_.size();
       PgNode new_node(_pose, node_number, recent_point_cloud_);
 
-      Pose2 init_pos(CONFIG_initial_node_global_x, CONFIG_initial_node_global_y, CONFIG_initial_node_global_theta);
-      noiseModel::Diagonal::shared_ptr init_noise =
-          noiseModel::Diagonal::Sigmas(Vector3(CONFIG_new_node_x_std,
-                                               CONFIG_new_node_y_std,
-                                               CONFIG_new_node_theta_std));
-      graph_->add(PriorFactor<Pose2>(new_node.getNodeNumber(), init_pos, init_noise));
+      if (CONFIG_runOnline) {
+        Pose2 init_pos(CONFIG_initial_node_global_x, CONFIG_initial_node_global_y, CONFIG_initial_node_global_theta);
+        noiseModel::Diagonal::shared_ptr init_noise =
+            noiseModel::Diagonal::Sigmas(Vector3(CONFIG_new_node_x_std,
+                                                CONFIG_new_node_y_std,
+                                                CONFIG_new_node_theta_std));
+        graph_->add(PriorFactor<Pose2>(new_node.getNodeNumber(), init_pos, init_noise));
+      }
       
       // odom_only_estimates_.emplace_back(std::make_pair(prev_odom_loc_, prev_odom_angle_));
       last_node_odom_pose_.Set(
@@ -230,7 +232,6 @@ namespace slam
     {
       // not first scan
       
-
       // Transform odomoetry pose from map frame to odometry frame. Get M(i, i-1) = M(i, odom) * M(i-1, odom)^-1
       // transform prev odom change from map frame to last node's frame
       pose_2d::Pose2Df rel_pos_to_last_node_odom_pose = transformPoseFromMap2Target(
@@ -270,11 +271,28 @@ namespace slam
       );
       
       // Add observation constraints
-      updatePoseGraphObsConstraints(new_node);
+      if (CONFIG_runOnline) {
+        updatePoseGraphObsConstraints(new_node);
+      }
+
+      pg_nodes_.push_back(new_node);
+      
+      if (CONFIG_runOnline) {
+        gtsam::Values init_estimate_for_new_node;
+        init_estimate_for_new_node.insert(new_node.getNodeNumber(), Pose2(new_node.getEstimatedPose().translation.x(),
+                                                                          new_node.getEstimatedPose().translation.y(),
+                                                                          new_node.getEstimatedPose().angle));
+        optimizePoseGraph(init_estimate_for_new_node);
+
+      }
     }
 
-    ROS_INFO_STREAM("Num edges " << graph_->size());
-    ROS_INFO_STREAM("Num nodes " << graph_->keys().size());
+    if (CONFIG_runOnline) {
+      // if offline, the edges and nodes will be added only in the end
+      // so there's no need to print #edges and #nodes here
+      ROS_INFO_STREAM("Num edges " << graph_->size());
+      ROS_INFO_STREAM("Num nodes " << graph_->keys().size());
+    }
   }
 
 
@@ -347,9 +365,10 @@ namespace slam
   }
 void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
   
-  ROS_INFO_STREAM("Updating PoseGraphObsConstraints");
+  ROS_INFO_STREAM("Updating PoseGraphObsConstraints(new_node=" << new_node.getNodeNumber() << ")");
   
-  PgNode preceding_node = pg_nodes_.back();
+  // PgNode preceding_node = pg_nodes_.back();
+  PgNode preceding_node = pg_nodes_[new_node.getNodeNumber()-1];
 
   // Add laser factor for previous pose and this node
   std::pair<pose_2d::Pose2Df, Eigen::Matrix3f> successive_scan_offset;
@@ -359,13 +378,13 @@ void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
   addObservationConstraint(preceding_node.getNodeNumber(), new_node.getNodeNumber(), successive_scan_offset);
 
   // Add constraints for non-successive scans for preceding node
-  if (CONFIG_non_successive_scan_constraints && pg_nodes_.size() > 2) {
+  if (CONFIG_non_successive_scan_constraints && new_node.getNodeNumber() > 2) {
       // TODO: specify skip_count and start_num
       int skip_count = 1;
       size_t start_num = 0;
       int num_added_factors = 0;
       // for every non-successive scan
-      for (size_t i = start_num; i < (pg_nodes_.size() - 2); i+= skip_count) {
+      for (size_t i = start_num; i < (new_node.getNodeNumber() - 2); i+= skip_count) {
         if (num_added_factors >= CONFIG_max_factors_per_node) {
             break;
         }
@@ -386,18 +405,6 @@ void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
       }
     }
   
-  // TODO: should we put it in the beginning?
-  pg_nodes_.push_back(new_node);
-  
-  if (CONFIG_runOnline) {
-    gtsam::Values init_estimate_for_new_node;
-    init_estimate_for_new_node.insert(new_node.getNodeNumber(), Pose2(new_node.getEstimatedPose().translation.x(),
-                                                                      new_node.getEstimatedPose().translation.y(),
-                                                                      new_node.getEstimatedPose().angle));
-    optimizePoseGraph(init_estimate_for_new_node);
-
-  }
-
 }
 
 void SLAM::offlineOptimizePoseGraph() {
@@ -410,6 +417,33 @@ void SLAM::offlineOptimizePoseGraph() {
   // TODO: We cannot run online and offline together right now.
   // Need to clear the graph and reconstruct the eddge constraints again and optimize it again.
   ROS_INFO_STREAM("Running Offline Optimization...");
+
+  // clear the graph
+  delete graph_;
+  delete isam_;
+
+  graph_ = new NonlinearFactorGraph();
+  isam_ = new ISAM2(); 
+
+  for (size_t i = 0; i < pg_nodes_.size(); i++) {
+      if (i==0) {
+        // need to add prior factor for first node
+        Pose2 init_pos(CONFIG_initial_node_global_x, CONFIG_initial_node_global_y, CONFIG_initial_node_global_theta);
+        noiseModel::Diagonal::shared_ptr init_noise =
+            noiseModel::Diagonal::Sigmas(Vector3(CONFIG_new_node_x_std,
+                                                CONFIG_new_node_y_std,
+                                                CONFIG_new_node_theta_std));
+        graph_->add(PriorFactor<Pose2>(pg_nodes_[i].getNodeNumber(), init_pos, init_noise));
+      } else{
+        updatePoseGraphObsConstraints(pg_nodes_[i]);
+
+
+      }
+
+  }
+
+  ROS_INFO_STREAM("[Offline Optim] Num edges " << graph_->size());
+  ROS_INFO_STREAM("[Offline Optim] Num nodes " << graph_->keys().size());
   // Insert all nodes with initial values
   gtsam::Values init_estimate_for_all_nodes;
   
@@ -430,7 +464,7 @@ void SLAM::offlineOptimizePoseGraph() {
       Pose2 estimated_pose = result.at<Pose2>(pg_node.getNodeNumber());
       pg_node.setPose(Vector2f(estimated_pose.x(), estimated_pose.y()), estimated_pose.theta());
   }
-  ROS_INFO_STREAM("Done offline optimization");
+  ROS_INFO_STREAM("[Offline Optim] Done");
   run_before = true;
 }
 void SLAM::optimizePoseGraph(gtsam::Values &new_node_init_estimates) {
