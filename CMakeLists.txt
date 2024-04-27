@@ -67,3 +67,6 @@ TARGET_LINK_LIBRARIES(cimg_example shared_library ${libs} X11)
 
 ROSBUILD_ADD_EXECUTABLE(stopSlam src/controlSlam/stopSlam_main.cc)
 TARGET_LINK_LIBRARIES(stopSlam shared_library ${libs})
+
+ROSBUILD_ADD_EXECUTABLE(listen_rosbag_pose src/listen_rosbag_pose.cc)
+TARGET_LINK_LIBRARIES(listen_rosbag_pose shared_library ${libs})
