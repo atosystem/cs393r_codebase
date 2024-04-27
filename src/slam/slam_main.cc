@@ -27,6 +27,7 @@
 #include <inttypes.h>
 #include <termios.h>
 #include <vector>
+#include <fstream>
 
 #include "eigen3/Eigen/Dense"
 #include "eigen3/Eigen/Geometry"
@@ -81,6 +82,17 @@ ros::Publisher localization_publisher_;
 ros::Publisher stopSlamComplete_publisher_;
 VisualizationMsg vis_msg_;
 sensor_msgs::LaserScan last_laser_msg_;
+
+void writeNodePose()
+{
+  std::ofstream output_file("estimated_pose.csv");
+  output_file << "x,y,theta\n";
+  for (const auto &node : slam_.GetPgNodes()) {
+    pose_2d::Pose2Df pose = node.getEstimatedPose();
+    output_file << pose.translation.x() << "," << pose.translation.y() << "," << pose.angle << '\n';
+  }
+  output_file.close();
+}
 
 void InitializeMsgs()
 {
@@ -245,6 +257,7 @@ int gtsam_test(int argc, char** argv) {
 void StopSlamCallback(const std_msgs::Empty &msg) {
     ROS_INFO_STREAM("StopSlam topic recieved!");
     slam_.stop_frontend();
+    writeNodePose();
     stopSlamComplete_publisher_.publish(std_msgs::Empty());
 }
 
