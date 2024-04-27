@@ -434,12 +434,12 @@ pair<Trans, Eigen::Matrix3f> CorrelativeScanMatcher::GetTransAndUncertainty(
         Eigen::Vector3f x(x_trans, y_trans, rotation);
         #pragma omp critical
         {
-          std::cout << "(" << rotation / M_PI * 180 << ", " 
-              <<  x_trans << ", " << y_trans 
-              << ", Prob: " << exp(cost) 
-              << ", Motion Prob: "
-              << exp(cost_motion)
-              <<")" << std::endl;
+          // std::cout << "(" << rotation / M_PI * 180 << ", " 
+          //     <<  x_trans << ", " << y_trans 
+          //     << ", Prob: " << exp(cost) 
+          //     << ", Motion Prob: "
+          //     << exp(cost_motion)
+          //     <<")" << std::endl;
           cost = exp(cost);
         }
         #pragma omp critical

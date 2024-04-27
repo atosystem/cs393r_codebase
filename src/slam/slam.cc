@@ -287,8 +287,12 @@ namespace slam
       }
     }
 
-    ROS_INFO_STREAM("Num edges " << graph_->size());
-    ROS_INFO_STREAM("Num nodes " << graph_->keys().size());
+    if (CONFIG_runOnline) {
+      // if offline, the edges and nodes will be added only in the end
+      // so there's no need to print #edges and #nodes here
+      ROS_INFO_STREAM("Num edges " << graph_->size());
+      ROS_INFO_STREAM("Num nodes " << graph_->keys().size());
+    }
   }
 
 
@@ -363,7 +367,8 @@ void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
   
   ROS_INFO_STREAM("Updating PoseGraphObsConstraints(new_node=" << new_node.getNodeNumber() << ")");
   
-  PgNode preceding_node = pg_nodes_.back();
+  // PgNode preceding_node = pg_nodes_.back();
+  PgNode preceding_node = pg_nodes_[new_node.getNodeNumber()-1];
 
   // Add laser factor for previous pose and this node
   std::pair<pose_2d::Pose2Df, Eigen::Matrix3f> successive_scan_offset;
@@ -373,13 +378,13 @@ void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
   addObservationConstraint(preceding_node.getNodeNumber(), new_node.getNodeNumber(), successive_scan_offset);
 
   // Add constraints for non-successive scans for preceding node
-  if (CONFIG_non_successive_scan_constraints && pg_nodes_.size() > 2) {
+  if (CONFIG_non_successive_scan_constraints && new_node.getNodeNumber() > 2) {
       // TODO: specify skip_count and start_num
       int skip_count = 1;
       size_t start_num = 0;
       int num_added_factors = 0;
       // for every non-successive scan
-      for (size_t i = start_num; i < (pg_nodes_.size() - 2); i+= skip_count) {
+      for (size_t i = start_num; i < (new_node.getNodeNumber() - 2); i+= skip_count) {
         if (num_added_factors >= CONFIG_max_factors_per_node) {
             break;
         }
