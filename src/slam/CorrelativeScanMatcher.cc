@@ -451,11 +451,25 @@ pair<Trans, Eigen::Matrix3f> CorrelativeScanMatcher::GetTransAndUncertainty(
       }
     }
   }
-  // Calculate Uncertainty matrix.
   // std::cout << "K: " << std::endl << K << std::endl;
   std::cout << "u " << std::endl << u << std::endl;
   std::cout << "s: " << std::endl << s << std::endl;
+  
+  // Check if CSM converged. If s is too small then return the odometry only.
+  if (s < EPSILON) {
+    // use odometry and fixed uncertainty
+    Trans trans = odom;
+    Eigen::Matrix3f fixed_uncertainty;
+    fixed_uncertainty << 1.0, 0, 0,
+                        0, 1.0, 0,
+                        0, 0, 1.0;
+    return std::make_pair(trans, fixed_uncertainty);
+  }
+  
+
+  // Calculate mean by normalizing u
   Trans trans = std::make_pair(Vector2f(u.x() / s, u.y() / s), u.z() / s);
+  // Calculate Uncertainty matrix.
   Eigen::Matrix3f uncertainty =
       (1.0 / s) * K - (1.0 / (s * s)) * u * u.transpose();
 
