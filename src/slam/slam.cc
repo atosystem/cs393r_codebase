@@ -57,14 +57,7 @@ using vector_map::VectorMap;
 // config from .lua file
 CONFIG_FLOAT(min_angle_diff_between_nodes, "min_angle_diff_between_nodes");
 CONFIG_FLOAT(min_trans_diff_between_nodes, "min_trans_diff_between_nodes");
-double scanner_range = 30.0;
-double trans_range = 2.0;
-double low_res = 0.3;
-double high_res = 0.03;
-float k1 = 0.1;
-float k2 = 0.05;
-float k3 = 0.1;
-float k4 = 0.1;
+
 
 // PoseGraph Parameters
 CONFIG_BOOL(considerOdomConstraint, "considerOdomConstraint");
@@ -93,6 +86,14 @@ CONFIG_BOOL(runOffline, "runOffline");
 CONFIG_BOOL(fix_mean, "fix_mean");
 CONFIG_BOOL(fix_covariance, "fix_covariance");
 
+double scanner_range = 30.0;
+double trans_range = 2.0; // trans_range near received odometry
+double low_res = 0.3;
+double high_res = 0.03;
+float k1 = 0.1;
+float k2 = 0.05;
+float k3 = 0.1;
+float k4 = 0.1;
 
 namespace slam
 {

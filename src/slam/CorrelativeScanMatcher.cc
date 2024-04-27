@@ -401,16 +401,21 @@ pair<Trans, Eigen::Matrix3f> CorrelativeScanMatcher::GetTransAndUncertainty(
   const vector<TransProb> low_res_costs =
       MemoizeLowRes(pointcloud_a, pointcloud_b_cost_low_res, low_res_,
                     trans_range_, 0, 2 * M_PI);
+  // 
+  int rotation_range = 45;
+  double rotation_start = -rotation_range / 2.0;
+
 #pragma omp parallel for
-  for (int i = 0; i < 360; i++) {
-    double rotation = i * M_PI / 180;
+  for (int i = 0; i < rotation_range; i++) {
+    double rotation = odom.second + (rotation_start / 180.0 * M_PI + EPSILON + i * 3.0 * M_PI / 180);
+  // for (double rotation = -45.0 / 180 * M_PI  + EPSILON + odom.second; rotation < 45.0 / 180 * M_PI  + odom.second; rotation +=  1.0 / 180 * M_PI)
     // Rotate the pointcloud by this rotation.
     const vector<Vector2f> rotated_pointcloud_a =
         RotatePointcloud(pointcloud_a, rotation);
-    for (double x_trans = -trans_range_ + EPSILON; x_trans < trans_range_;
+    for (double x_trans = -trans_range_ + EPSILON + odom.first.x(); x_trans < trans_range_ + odom.first.x();
          x_trans += low_res_) {
-      for (double y_trans = -trans_range_ + EPSILON; y_trans < trans_range_;
-           y_trans += low_res_) {
+      for (double y_trans = -trans_range_ + EPSILON + odom.first.y(); y_trans < trans_range_ + odom.first.y();
+           y_trans += low_res_ ) {
         // If this is a negligible amount of the total sum then just use the
         // low res cost, don't worry about the high res cost.
         size_t abs_coord =
@@ -429,7 +434,7 @@ pair<Trans, Eigen::Matrix3f> CorrelativeScanMatcher::GetTransAndUncertainty(
         Eigen::Vector3f x(x_trans, y_trans, rotation);
         #pragma omp critical
         {
-          std::cout << "(" << rotation << ", " 
+          std::cout << "(" << rotation / M_PI * 180 << ", " 
               <<  x_trans << ", " << y_trans 
               << ", Prob: " << exp(cost) 
               << ", Motion Prob: "
@@ -448,8 +453,8 @@ pair<Trans, Eigen::Matrix3f> CorrelativeScanMatcher::GetTransAndUncertainty(
   }
   // Calculate Uncertainty matrix.
   // std::cout << "K: " << std::endl << K << std::endl;
-  // std::cout << "u " << std::endl << u << std::endl;
-  // std::cout << "s: " << std::endl << s << std::endl;
+  std::cout << "u " << std::endl << u << std::endl;
+  std::cout << "s: " << std::endl << s << std::endl;
   Trans trans = std::make_pair(Vector2f(u.x() / s, u.y() / s), u.z() / s);
   Eigen::Matrix3f uncertainty =
       (1.0 / s) * K - (1.0 / (s * s)) * u * u.transpose();
