@@ -23,7 +23,7 @@ initial_node_global_x = -26
 initial_node_global_y = 8
 initial_node_global_theta = 1.6
 
-runOnline = true
-runOffline = false
+runOnline = false
+runOffline = true
 fix_mean = false -- use odom 
 fix_covariance = true -- diagonal covariance
