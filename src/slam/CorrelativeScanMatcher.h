@@ -17,8 +17,8 @@
 #include "visualization/CImg.h"
 #include "shared/math/math_util.h"
 #include "shared/math/statistics.h"
-
-#define DEFAULT_GAUSSIAN_SIGMA 4
+// ---- Debugging: original 4 --------------------
+#define DEFAULT_GAUSSIAN_SIGMA 1
 #define MIN_VALUE_FOR_LOOKUP 1E-10
 
 using cimg_library::CImg;
