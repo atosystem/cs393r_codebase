@@ -271,6 +271,17 @@ namespace slam
       
       // Add observation constraints
       updatePoseGraphObsConstraints(new_node);
+
+      pg_nodes_.push_back(new_node);
+      
+      if (CONFIG_runOnline) {
+        gtsam::Values init_estimate_for_new_node;
+        init_estimate_for_new_node.insert(new_node.getNodeNumber(), Pose2(new_node.getEstimatedPose().translation.x(),
+                                                                          new_node.getEstimatedPose().translation.y(),
+                                                                          new_node.getEstimatedPose().angle));
+        optimizePoseGraph(init_estimate_for_new_node);
+
+      }
     }
 
     ROS_INFO_STREAM("Num edges " << graph_->size());
@@ -347,7 +358,7 @@ namespace slam
   }
 void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
   
-  ROS_INFO_STREAM("Updating PoseGraphObsConstraints");
+  ROS_INFO_STREAM("Updating PoseGraphObsConstraints(new_node=" << new_node.getNodeNumber() << ")");
   
   PgNode preceding_node = pg_nodes_.back();
 
@@ -386,18 +397,6 @@ void SLAM::updatePoseGraphObsConstraints(PgNode &new_node) {
       }
     }
   
-  // TODO: should we put it in the beginning?
-  pg_nodes_.push_back(new_node);
-  
-  if (CONFIG_runOnline) {
-    gtsam::Values init_estimate_for_new_node;
-    init_estimate_for_new_node.insert(new_node.getNodeNumber(), Pose2(new_node.getEstimatedPose().translation.x(),
-                                                                      new_node.getEstimatedPose().translation.y(),
-                                                                      new_node.getEstimatedPose().angle));
-    optimizePoseGraph(init_estimate_for_new_node);
-
-  }
-
 }
 
 void SLAM::offlineOptimizePoseGraph() {
