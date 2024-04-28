@@ -5,3 +5,6 @@ lib
 data
 realCarBags
 .DS_Store
+
+# for soft link
+config/realCarExp/current_slam.lua
