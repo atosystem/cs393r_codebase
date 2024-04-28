@@ -263,6 +263,12 @@ void StopSlamCallback(const std_msgs::Empty &msg) {
     ROS_INFO_STREAM("Dump optim_after.csv");
     writeNodePose("optim_after.csv");
     stopSlamComplete_publisher_.publish(std_msgs::Empty());
+
+    // draw new results after optimization
+    PublishMap();
+    PublishPose();
+    PublishTrajectory();
+    visualization_publisher_.publish(vis_msg_);
 }
 
 int main(int argc, char **argv)
