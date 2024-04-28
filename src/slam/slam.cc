@@ -164,9 +164,9 @@ namespace slam
       updatePoseGraph();
     }
 
-    if (stopSlamCmdRecv_ && CONFIG_runOffline) {
-      offlineOptimizePoseGraph();
-    }
+    // if (stopSlamCmdRecv_ && CONFIG_runOffline) {
+    //   offlineOptimizePoseGraph();
+    // }
 
   }
 
@@ -579,6 +579,7 @@ bool SLAM::ScanMatch(PgNode &base_node, PgNode &match_node,
 void SLAM::stop_frontend(){
   stopSlamCmdRecv_ = true;
   ROS_INFO_STREAM("runOnline="<<CONFIG_runOnline<<", runOffline="<<CONFIG_runOffline);
+  offlineOptimizePoseGraph();
 }
 
 }  // namespace slam
