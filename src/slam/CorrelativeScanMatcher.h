@@ -141,10 +141,22 @@ class CorrelativeScanMatcher {
   Eigen::Matrix2f GetUncertaintyMatrix(const vector<Vector2f>& pointcloud_a,
                                        const vector<Vector2f>& pointcloud_b,
                                        const double rotation);
-  pair<Trans, Eigen::Matrix3f> GetTransAndUncertainty(
+  /**
+   * @brief Get the Trans And Uncertainty object
+   * 
+   * @param pointcloud_a [in]
+   * @param pointcloud_b [in]
+   * @param odom [in]
+   * @param results [out]
+   * @return true if csm converged, false otherwise
+   * @return false 
+   */
+  bool GetTransAndUncertainty(
       const vector<Vector2f>& pointcloud_a,
       const vector<Vector2f>& pointcloud_b,
-      const Trans& odom);
+      const Trans& odom,
+      pair<Trans, Eigen::Matrix3f>& results);
+
   // Computes the local uncertainty of the *last* scan in the provided vector of
   // point clouds, relative to the previous ones
   std::pair<double, double> GetLocalUncertaintyStats(
