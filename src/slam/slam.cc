@@ -87,7 +87,7 @@ CONFIG_BOOL(fix_mean, "fix_mean");
 CONFIG_BOOL(fix_covariance, "fix_covariance");
 
 double scanner_range = 30.0;
-double trans_range = 2.0; // trans_range near received odometry
+double trans_range = 1.0; // trans_range near received odometry
 double low_res = 0.3;
 double high_res = 0.03;
 float k1 = 0.1;

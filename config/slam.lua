@@ -18,12 +18,12 @@ new_node_y_std = 1.0;
 new_node_theta_std = 1.0;
 non_successive_scan_constraints = true
 max_factors_per_node = 15
-maximum_node_dis_scan_comparison = 2.0
+maximum_node_dis_scan_comparison = 5.0
 initial_node_global_x = -26
 initial_node_global_y = 8
 initial_node_global_theta = 1.6
 
-runOnline = true
-runOffline = false
+runOnline = false
+runOffline = true
 fix_mean = false -- use odom 
 fix_covariance = true -- diagonal covariance
