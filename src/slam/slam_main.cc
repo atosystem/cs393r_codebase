@@ -83,9 +83,9 @@ ros::Publisher stopSlamComplete_publisher_;
 VisualizationMsg vis_msg_;
 sensor_msgs::LaserScan last_laser_msg_;
 
-void writeNodePose()
+void writeNodePose(const std::string &fn)
 {
-  std::ofstream output_file("estimated_pose.csv");
+  std::ofstream output_file(fn);
   output_file << "x,y,theta\n";
   for (const auto &node : slam_.GetPgNodes()) {
     pose_2d::Pose2Df pose = node.getEstimatedPose();
@@ -256,8 +256,12 @@ int gtsam_test(int argc, char** argv) {
 
 void StopSlamCallback(const std_msgs::Empty &msg) {
     ROS_INFO_STREAM("StopSlam topic recieved!");
+    // write node pose before optimization
+    ROS_INFO_STREAM("Dump optim_before.csv");
+    writeNodePose("optim_before.csv");
     slam_.stop_frontend();
-    writeNodePose();
+    ROS_INFO_STREAM("Dump optim_after.csv");
+    writeNodePose("optim_after.csv");
     stopSlamComplete_publisher_.publish(std_msgs::Empty());
 }
 
