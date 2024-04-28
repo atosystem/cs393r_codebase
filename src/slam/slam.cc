@@ -99,7 +99,7 @@ namespace slam
 {
 
   // load config from file
-  config_reader::ConfigReader config_reader_({"config/slam.lua"});
+  config_reader::ConfigReader config_reader_({"config/current_slam.lua"});
 
   SLAM::SLAM() : prev_odom_loc_(0, 0),
                  prev_odom_angle_(0),

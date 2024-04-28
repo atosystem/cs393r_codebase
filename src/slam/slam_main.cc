@@ -276,8 +276,8 @@ int main(int argc, char **argv)
   google::ParseCommandLineFlags(&argc, &argv, false);
   
   // TODO remove this
-  ROS_INFO_STREAM("Running GTSAM demo to verify install");
-  ROS_INFO_STREAM(gtsam_test(argc, argv));
+  // ROS_INFO_STREAM("Running GTSAM demo to verify install");
+  // ROS_INFO_STREAM(gtsam_test(argc, argv));
 
   // Initialize ROS.
   ros::init(argc, argv, "slam");
