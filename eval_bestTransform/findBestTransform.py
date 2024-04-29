@@ -1,3 +1,4 @@
+import math
 import pandas as pd
 import torch
 import numpy as np
@@ -79,7 +80,7 @@ def cal_loss(ref_poses, est_poses):
         assert y.dim() == 1
         loss = 0
         loss += torch.norm(torch.abs(x[:2] - y[:2]))
-        loss += 1 - torch.cos(x[2] - y[2])
+        # loss += 1 - torch.cos(x[2] - y[2])
         # loss += torch.norm(torch.abs(x[2] % (2 * torch.pi)-y[2]))
         return loss
         # return torch.norm(torch.abs(x-y))
@@ -112,7 +113,12 @@ class learnedTransform(nn.Module):
         self.rotation = torch.nn.Parameter(torch.zeros(1))
 
     def forward(self, x):
-        x[:, :2] = x[:, :2] + self.translation.reshape(1, 2)
+        rotation_matrix = torch.tensor(
+            [[torch.cos(self.rotation), -torch.sin(self.rotation)],
+             [torch.sin(self.rotation), torch.cos(self.rotation)]]
+        )
+
+        x[:, :2] = torch.matmul(rotation_matrix, x[:, :2].t()).t() + self.translation.reshape(1, 2)
         # x[:,2] = torch.clamp(x[:,2] + self.rotation , -torch.pi / 2, torch.pi / 2)
         # x[:,2] = x[:,2] + torch.clamp(self.rotation,0,2* torch.pi)
         x[:, 2] = x[:, 2] + torch.clamp(self.rotation, -torch.pi / 2, torch.pi / 2)
@@ -183,11 +189,12 @@ def main(args):
     if not args.out_csv is None:
         for index, row in df_est.iterrows():
             # Example: Multiply each value in column 'A' by 10
-            df_est.at[index, "x"] = df_est.at[index, "x"] + best_transform[0][0].item()
-            df_est.at[index, "y"] = df_est.at[index, "y"] + best_transform[0][1].item()
-            df_est.at[index, "theta"] = (
-                df_est.at[index, "theta"] + best_transform[1].item()
-            ) % (torch.pi * 2)
+            x, y = df_est.at[index, "x"], df_est.at[index, "y"]
+            dx, dy, dtheta = best_transform[0][0].item(), best_transform[0][1].item(), best_transform[1].item()
+
+            df_est.at[index, "x"] = math.cos(dtheta) * x - math.sin(dtheta) * y + dx
+            df_est.at[index, "y"] = math.sin(dtheta) * x + math.cos(dtheta) * y + dy
+            df_est.at[index, "theta"] = (df_est.at[index, "theta"] + dtheta) % (torch.pi * 2)
 
         df_est.to_csv(args.out_csv, index=False)
         print("Saved to:", args.out_csv)
