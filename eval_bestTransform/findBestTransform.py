@@ -133,6 +133,8 @@ def main(args):
 
     # Training loop
     num_epochs = args.epoch
+    # save best transform [(x,y),theta,loss]
+    best_transform = []
     for epoch in range(num_epochs):
         # Forward pass
         ref_poses = torch.FloatTensor(df_ref.values)
@@ -142,6 +144,11 @@ def main(args):
         
         # Step 5: Compute loss
         loss, dtw_total_cost = cal_loss(ref_poses=ref_poses,est_poses=outputs)
+
+        if len(best_transform) == 0:
+            best_transform = [model.translation.detach(),model.rotation.detach(),loss.detach()]
+        elif best_transform[2] > loss:
+            best_transform = [model.translation.detach(),model.rotation.detach(),loss.detach()]
         
         # Zero gradients, backward pass, and optimize
         optimizer.zero_grad()  # Clear gradients
@@ -154,9 +161,16 @@ def main(args):
 
 
     # After training
-    print("Model parameters after training:")
-    for name, param in model.named_parameters():
-        print(name, param.data)
+    # print("Model parameters after training:")
+    print("\n\n====================================")
+    print("Best transform:")
+    print("Tanslation:",best_transform[0])
+    print("Rotation:",best_transform[1])
+    print("Loss:",best_transform[2])
+    print("====================================")
+
+    # for name, param in model.named_parameters():
+    #     print(name, param.data)
 
 
 
@@ -166,9 +180,9 @@ def main(args):
 
 if __name__ == "__main__":
     torch.manual_seed(0)
-    # torch.cuda.manual_seed(0)
-    # torch.backends.cudnn.deterministic = True
-    # torch.backends.cudnn.benchmark = False
+    torch.cuda.manual_seed(0)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
     parser = argparse.ArgumentParser(description="Find best pose transform between two trajectory")
 
