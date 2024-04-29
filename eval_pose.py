@@ -39,8 +39,8 @@ def main():
     for i, (x, y) in enumerate(xy):
         if i < len(xy) - 1 and xy[i + 1][1] == y:
             continue
-        cost = cost_matrix[x, y]
-        acc_cost = acc_cost_matrix[x, y]
+        cost += cost_matrix[x, y]
+        acc_cost += acc_cost_matrix[x, y]
     print(f"Comparing {args.estimated} and {args.reference} using DTW")
     print("Distance:", d)
     print("Cost:", cost)
