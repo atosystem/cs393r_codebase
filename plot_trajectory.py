@@ -64,9 +64,9 @@ def main():
 
     for i, file_path in enumerate(args.csv_files):
         df = pd.read_csv(file_path)
-        aligned_df = transform_poses(df)
+        # aligned_df = transform_poses(df)
         exp_name = os.path.splitext(os.path.basename(file_path))[0]
-        plot_trajectory(aligned_df, label=exp_name, color=f'C{i}')
+        plot_trajectory(df, label=exp_name, color=f'C{i}')
 
     plt.savefig(args.output)
 
