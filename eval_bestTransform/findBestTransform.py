@@ -80,7 +80,7 @@ def cal_loss(ref_poses, est_poses):
         assert y.dim() == 1
         loss = 0
         loss += torch.norm(torch.abs(x[:2] - y[:2]))
-        loss += 1 - torch.cos(x[2] - y[2])
+        # loss += 1 - torch.cos(x[2] - y[2])
         # loss += torch.norm(torch.abs(x[2] % (2 * torch.pi)-y[2]))
         return loss
         # return torch.norm(torch.abs(x-y))
