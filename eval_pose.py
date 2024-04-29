@@ -26,10 +26,10 @@ def main():
     estimated_pose = np.array(estimated_pose)
     reference_pose = np.array(reference_pose)
 
-    l2_norm = lambda x, y: np.sum((x - y) ** 2)
+    se2_dist = lambda x, y: ((x[0] - y[0]) ** 2 + (x[1] - y[1]) ** 2) ** 0.5 + 1 - np.cos(x[2] - y[2])
 
     d, cost_matrix, acc_cost_matrix, path = dtw(
-        reference_pose, estimated_pose, dist=l2_norm)
+        reference_pose, estimated_pose, dist=se2_dist)
 
     xy = []
     for i in range(len(path[0])):
