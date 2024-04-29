@@ -4,7 +4,7 @@ This program finds the best transform between two trajectories such that the dtw
 
 ## Run
 ```bash
-python findBestTransform.py --ref reference_pose.csv --est estimated_pose.csv
+python findBestTransform.py --ref <ref csv path> --est <est csv path> --outcsv [output trasformed est]
 ```
 
 Result:

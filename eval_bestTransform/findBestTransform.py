@@ -169,6 +169,17 @@ def main(args):
     print("Loss:",best_transform[2])
     print("====================================")
 
+    if not args.out_csv is None:
+        for index, row in df_est.iterrows():
+            # Example: Multiply each value in column 'A' by 10
+            df_est.at[index, 'x'] = df_est.at[index, 'x'] + best_transform[0][0].item()
+            df_est.at[index, 'y'] = df_est.at[index, 'y'] + best_transform[0][1].item()
+            df_est.at[index, 'theta'] =  (df_est.at[index, 'theta'] + best_transform[1].item() ) % (torch.pi *2)
+        
+        df_est.to_csv(args.out_csv,index=False)
+        print("Saved to:",args.out_csv)
+
+
     # for name, param in model.named_parameters():
     #     print(name, param.data)
 
@@ -191,6 +202,7 @@ if __name__ == "__main__":
     parser.add_argument("--est", type=str, help="estimated pose csv file path")
     parser.add_argument("--lr", type=float,  default=0.1, help="learning rate")
     parser.add_argument("--epoch", type=int, default=100 , help="numer of iteration")
+    parser.add_argument("--out_csv", type=str,  default=None, help="save transformed est to csv")
 
     # Parse arguments from command line
     args = parser.parse_args()
