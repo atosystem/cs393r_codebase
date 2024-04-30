@@ -485,17 +485,19 @@ bool CorrelativeScanMatcher::GetTransAndUncertainty(
 
 double CorrelativeScanMatcher::EvaluateMotionModel(
     const Trans &trans, const Trans &odom) {
-  const float x_trans = trans.first.x(),
-              y_trans = trans.first.y(),
-              rotation = trans.second,
-              odom_trans = odom.first.norm(),
-              odom_rot = std::fabs(odom.second);
+  // transform `trans` from base-node frame to match-node frame
+  const Eigen::Rotation2Df R(-odom.second);
+  const Eigen::Vector2f translation = R * (trans.first - odom.first);
+  const float rotation = math_util::AngleDiff(trans.second, odom.second);
 
-  const float trans_error = k1_ * odom_trans + k2_ * odom_rot,
-                rot_error = k3_ * odom_trans + k4_ * odom_rot;
+  // calculate error from odom
+  const float odom_trans = odom.first.norm(), odom_rotat = std::fabs(odom.second);
+  const float match_x_error = 0.5 * odom_trans + 0.1 * odom_rotat,
+              match_y_error = 0.5 * odom_trans + 0.1 * odom_rotat,
+              rotation_error = 0.5 * odom_trans + 0.1 * odom_rotat;
 
   return (double) std::log(
-    ProbabilityDensityGaussian(x_trans, odom.first.x(), trans_error) *
-    ProbabilityDensityGaussian(y_trans, odom.first.y(), trans_error) *
-    ProbabilityDensityGaussian(rotation, odom.second, rot_error));
+    ProbabilityDensityGaussian(translation.x(), 0.f, match_x_error) *
+    ProbabilityDensityGaussian(translation.y(), 0.f, match_y_error) *
+    ProbabilityDensityGaussian(rotation, 0.f, rotation_error));
 }
