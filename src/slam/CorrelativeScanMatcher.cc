@@ -406,6 +406,7 @@ bool CorrelativeScanMatcher::GetTransAndUncertainty(
   int rotation_range = 45;
   double rotation_start = -rotation_range / 2.0;
 
+  TransProb best; best.first = -INFINITY;
 #pragma omp parallel for
   for (int i = 0; i < rotation_range; i++) {
     double rotation = odom.second + (rotation_start / 180.0 * M_PI + EPSILON + i * 3.0 * M_PI / 180);
@@ -445,6 +446,9 @@ bool CorrelativeScanMatcher::GetTransAndUncertainty(
         cost = exp(cost);
         #pragma omp critical
         {
+          if (cost > best.first) {
+            best = std::make_pair(cost, trans);
+          }
           K += x * x.transpose() * cost;
           u += x * cost;
           s += cost;
@@ -470,7 +474,7 @@ bool CorrelativeScanMatcher::GetTransAndUncertainty(
   
 
   // Calculate mean by normalizing u
-  Trans trans = std::make_pair(Vector2f(u.x() / s, u.y() / s), u.z() / s);
+  Trans trans = best.second;
   // Calculate Uncertainty matrix.
   Eigen::Matrix3f uncertainty =
       (1.0 / s) * K - (1.0 / (s * s)) * u * u.transpose();
