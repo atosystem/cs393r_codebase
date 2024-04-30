@@ -70,3 +70,6 @@ TARGET_LINK_LIBRARIES(stopSlam shared_library ${libs})
 
 ROSBUILD_ADD_EXECUTABLE(listen_rosbag_pose src/listen_rosbag_pose.cc)
 TARGET_LINK_LIBRARIES(listen_rosbag_pose shared_library ${libs})
+
+ROSBUILD_ADD_EXECUTABLE(syncRosBagPlayer src/controlSlam/syncRosBagPlayer.cc)
+TARGET_LINK_LIBRARIES(syncRosBagPlayer shared_library ${libs})
