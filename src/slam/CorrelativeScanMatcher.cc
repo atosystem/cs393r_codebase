@@ -431,6 +431,10 @@ bool CorrelativeScanMatcher::GetTransAndUncertainty(
         }
         const Trans trans(Vector2f(x_trans, y_trans), rotation);
         double cost_motion = EvaluateMotionModel(trans, odom);
+        // Skip if observation or motion is too unlikely
+        if (std::exp(cost) < 1E-10 || std::exp(cost_motion) < 1E-10) {
+          continue;
+        }
         cost += cost_motion;
         Eigen::Vector3f x(x_trans, y_trans, rotation);
         // #pragma omp critical
