@@ -12,7 +12,6 @@ motion_model_rot_err_from_rot = 0.4;
 
 
 -- PoseGraph Parameters --------------------------------
-considerOdomConstraint = false;
 new_node_x_std = 1.0;
 new_node_y_std = 1.0;
 new_node_theta_std = 1.0;

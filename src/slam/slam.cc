@@ -58,7 +58,6 @@ CONFIG_FLOAT(min_angle_diff_between_nodes, "min_angle_diff_between_nodes");
 CONFIG_FLOAT(min_trans_diff_between_nodes, "min_trans_diff_between_nodes");
 
 // PoseGraph Parameters
-CONFIG_BOOL(considerOdomConstraint, "considerOdomConstraint");
 CONFIG_FLOAT(new_node_x_std, "new_node_x_std");
 CONFIG_FLOAT(new_node_y_std, "new_node_y_std");
 CONFIG_FLOAT(new_node_theta_std, "new_node_theta_std");
