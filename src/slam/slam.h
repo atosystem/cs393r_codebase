@@ -82,16 +82,12 @@ namespace slam
      * @return true if csm was successful, false otherwise.
      */
     bool ScanMatch(PgNode &base_node, PgNode &match_node,
-                  pair<pose_2d::Pose2Df, Eigen::Matrix3f> &result);
-
- 
+                   pair<pose_2d::Pose2Df, Eigen::Matrix3f> &result);
 
     /**
      * @return true if the robot has moved far enough.
      */
     bool shouldAddPgNode();
- 
-  
 
     /**
      * @brief update pose graph with latest scans.
@@ -125,7 +121,7 @@ namespace slam
     void optimizePoseGraph(gtsam::Values &new_node_init_estimates);
 
     void offlineOptimizePoseGraph();
-    
+
     /**
      * Run CSM on the measurements of the two nodes to get the estimated position of node 2 in the frame of node 1.
      *
@@ -136,7 +132,6 @@ namespace slam
      */
     void runCSM(PgNode &base_node, PgNode &match_node, std::pair<pose_2d::Pose2Df, Eigen::MatrixXd> &csm_results);
 
-
     // Utility functions.
     void convertLidar2PointCloud(
         const std::vector<float> &ranges,
@@ -145,14 +140,15 @@ namespace slam
         float angle_min,
         float angle_max);
 
-    pose_2d::Pose2Df transformPoseFromSrc2Map(const pose_2d::Pose2Df & pose_rel_src_frame, 
-                                            const pose_2d::Pose2Df & src_frame_pose_rel_map_frame);
+    pose_2d::Pose2Df transformPoseFromSrc2Map(const pose_2d::Pose2Df &pose_rel_src_frame,
+                                              const pose_2d::Pose2Df &src_frame_pose_rel_map_frame);
 
-    pose_2d::Pose2Df transformPoseFromMap2Target(const pose_2d::Pose2Df & pose_rel_map_frame, 
-                                            const pose_2d::Pose2Df & target_frame_pose_rel_map_frame);
+    pose_2d::Pose2Df transformPoseFromMap2Target(const pose_2d::Pose2Df &pose_rel_map_frame,
+                                                 const pose_2d::Pose2Df &target_frame_pose_rel_map_frame);
 
     // stop front end SLAM
     void stop_frontend();
+
   private:
     // Previous odometry-reported locations.
     Eigen::Vector2f prev_odom_loc_;
@@ -167,8 +163,7 @@ namespace slam
 
     float last_node_cumulative_dist_;
 
-
-    gtsam::NonlinearFactorGraph* graph_;
+    gtsam::NonlinearFactorGraph *graph_;
 
     gtsam::ISAM2 *isam_;
 
