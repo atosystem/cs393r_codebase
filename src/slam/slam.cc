@@ -84,8 +84,7 @@ CONFIG_BOOL(fix_covariance, "fix_covariance");
 
 double scanner_range = 30.0;
 double trans_range = 1.0; // trans_range near received odometry
-double low_res = 0.3;
-double high_res = 0.03;
+double resolution = 0.03;
 float k1 = 0.1;
 float k2 = 0.05;
 float k3 = 0.1;
@@ -102,10 +101,7 @@ namespace slam
                  odom_initialized_(false),
                  first_scan(true),
                  last_node_cumulative_dist_(0),
-                 matcher(
-                     scanner_range, trans_range,
-                     low_res, high_res,
-                     k1, k2, k3, k4),
+                 matcher(scanner_range, trans_range, resolution, k1, k2, k3, k4),
                  stopSlamCmdRecv_(false)
   {
     graph_ = new NonlinearFactorGraph();
@@ -533,25 +529,27 @@ namespace slam
                        pair<pose_2d::Pose2Df, Eigen::Matrix3f> &result)
   {
     // Calculate initial guess of the relative pose from odometry.
-    ROS_INFO_STREAM("[ScanMatch] nodes: (" << base_node.getNodeNumber() << ", " << match_node.getNodeNumber() << ")");
+    ROS_INFO_STREAM("[ScanMatch] nodes: (" <<
+      base_node.getNodeNumber() << ", " << match_node.getNodeNumber() << ")");
     const pose_2d::Pose2Df &base_pose = base_node.getEstimatedPose();
     const pose_2d::Pose2Df &match_pose = match_node.getEstimatedPose();
-    pose_2d::Pose2Df odom_match_rel_base = transformPoseFromMap2Target(match_pose, base_pose);
+    pose_2d::Pose2Df odom_match_rel_base = transformPoseFromMap2Target(
+      match_pose, base_pose);
     const Trans odom(
         odom_match_rel_base.translation,
         odom_match_rel_base.angle);
 
     // Run the scan matcher to get the relative pose and uncertainty.
-    pair<Trans, Eigen::Matrix3f> trans_and_uncertainty;
-    bool converged = matcher.GetTransAndUncertainty(match_node.getPointCloud(), base_node.getPointCloud(), odom, trans_and_uncertainty);
+    pair<Trans, Eigen::Matrix3f> transform;
+    bool converged = matcher.GetTransform(
+      match_node.getPointCloud(), base_node.getPointCloud(), odom, transform);
     // csm not converged, return false
     if (!converged)
       return false;
 
-    const Trans &trans = trans_and_uncertainty.first;
-
-    result.first = pose_2d::Pose2Df(trans.second, trans.first);
-    result.second = trans_and_uncertainty.second;
+    result.first = pose_2d::Pose2Df(
+      transform.first.second, transform.first.first);
+    result.second = transform.second;
 
     // --- Debugging: use odom as mean --------------------------------
     if (CONFIG_fix_mean)
@@ -574,7 +572,8 @@ namespace slam
   void SLAM::stop_frontend()
   {
     stopSlamCmdRecv_ = true;
-    ROS_INFO_STREAM("runOnline=" << CONFIG_runOnline << ", runOffline=" << CONFIG_runOffline);
+    ROS_INFO_STREAM(
+      "runOnline=" << CONFIG_runOnline << ", runOffline=" << CONFIG_runOffline);
     offlineOptimizePoseGraph();
   }
 

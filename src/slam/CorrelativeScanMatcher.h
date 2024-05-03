@@ -1,25 +1,14 @@
-#ifndef SRC_SLAM_CORRELATIVESCANMATCHER_H_
-#define SRC_SLAM_CORRELATIVESCANMATCHER_H_
+#ifndef SRC_SLAM_CSM_H_
+#define SRC_SLAM_CSM_H_
 
-#include <glog/logging.h>
-#include <cmath>
-#include <cstdint>
-
-#include <memory>
-#include <mutex>
-#include <string>
-#include <utility>
 #include <vector>
-
-#include <boost/dynamic_bitset.hpp>
 #include "eigen3/Eigen/Dense"
-
 #include "visualization/CImg.h"
-#include "shared/math/math_util.h"
 #include "shared/math/statistics.h"
-// ---- Debugging: original 4 --------------------
+
 #define DEFAULT_GAUSSIAN_SIGMA 1
 #define MIN_VALUE_FOR_LOOKUP 1E-10
+#define EPSILON 1e-6
 
 using cimg_library::CImg;
 using Eigen::Vector2f;
@@ -28,14 +17,13 @@ using std::vector;
 using statistics::ProbabilityDensityGaussian;
 
 typedef pair<Vector2f, float> Trans;
-typedef pair<double, Trans> TransProb;
 
-struct LookupTable {
+struct CostTable {
   uint64_t width;
   uint64_t height;
   double resolution;
   CImg<double> values;
-  LookupTable(const double range, const double resolution)
+  CostTable(const double range, const double resolution)
       : width(floor((range * 2.0) / resolution)),
         height(floor((range * 2.0) / resolution)),
         resolution(resolution) {
@@ -44,7 +32,7 @@ struct LookupTable {
     values = CImg<double>(width, height, 1, 1, 0.0);
   }
 
-  LookupTable() : width(0), height(0), resolution(1) {}
+  CostTable() : width(0), height(0), resolution(1) {}
 
   inline uint64_t convertX(float x) const {
     return width / 2 + floor(x / resolution);
@@ -64,15 +52,6 @@ struct LookupTable {
     return values(x, y);
   }
 
-  bool IsInside(Vector2f point) const {
-    uint64_t x = convertX(point.x());
-    uint64_t y = convertY(point.y());
-    if (x >= width || y >= height) {
-      return false;
-    }
-    return true;
-  }
-
   void SetPointValue(Vector2f point, double value) {
     uint64_t x = convertX(point.x());
     uint64_t y = convertY(point.y());
@@ -88,59 +67,19 @@ struct LookupTable {
     values = values.blur(sigma, sigma, 0, true, true);
   }
 
-  void clear() { values = values.clear(); }
-
   void GaussianBlur() { GaussianBlur(DEFAULT_GAUSSIAN_SIGMA); }
-
-  CImg<double> GetDebugImage() const { return values; }
-
-  double MaxArea(double start_x, double start_y, double end_x,
-                 double end_y) const {
-    uint64_t sx = convertX(start_x);
-    uint64_t sy = convertY(start_y);
-    uint64_t ex = convertX(end_x);
-    uint64_t ey = convertY(end_y);
-
-    CImg<double> cropped = values.get_crop(sx, sy, ex - 1, ey - 1);
-    const double max_val = cropped.max();
-    return max_val;
-  }
-
-  // Converts the x and y into an absolute 1D coordinate.
-  size_t AbsCoords(double x, double y) const {
-    size_t row = ((height / 2) + round(y / resolution)) * width;
-    size_t col = (width / 2) + round(x / resolution);
-    CHECK_GE(row + col, 0);
-    return row + col;
-  }
 };
 
 class CorrelativeScanMatcher {
  public:
-  CorrelativeScanMatcher(double scanner_range, double trans_range,
-                         double low_res, double high_res,
-                         float k1, float k2, float k3, float k4)
-      : scanner_range_(scanner_range),
+  CorrelativeScanMatcher(
+    double scanner_range, double trans_range, double resolution,
+    float k1, float k2, float k3, float k4) :
+        scanner_range_(scanner_range),
         trans_range_(trans_range),
-        low_res_(low_res),
-        high_res_(high_res),
+        resolution(resolution),
         k1_(k1), k2_(k2), k3_(k3), k4_(k4) {}
-  TransProb GetTransformation(
-      const vector<Vector2f>& pointcloud_a,
-      const vector<Vector2f>& pointcloud_b,
-      const double rotation_min = 0,
-      const double rotation_max = 2 * M_PI);
-  TransProb GetTransformation(
-      const vector<Vector2f>& pointcloud_a,
-      const vector<Vector2f>& pointcloud_b,
-      const double rotation_a,
-      const double rotation_b,
-      const double rotation_restriction);
-  Eigen::Matrix3f GetUncertaintyMatrix(const vector<Vector2f>& pointcloud_a,
-                                       const vector<Vector2f>& pointcloud_b);
-  Eigen::Matrix2f GetUncertaintyMatrix(const vector<Vector2f>& pointcloud_a,
-                                       const vector<Vector2f>& pointcloud_b,
-                                       const double rotation);
+
   /**
    * @brief Get the Trans And Uncertainty object
    * 
@@ -149,35 +88,28 @@ class CorrelativeScanMatcher {
    * @param odom [in]
    * @param results [out]
    * @return true if csm converged, false otherwise
-   * @return false 
    */
-  bool GetTransAndUncertainty(
-      const vector<Vector2f>& pointcloud_a,
-      const vector<Vector2f>& pointcloud_b,
-      const Trans& odom,
-      pair<Trans, Eigen::Matrix3f>& results);
-
-  // Computes the local uncertainty of the *last* scan in the provided vector of
-  // point clouds, relative to the previous ones
-  std::pair<double, double> GetLocalUncertaintyStats(
-      const vector<vector<Vector2f>>& comparisonClouds,
-      const vector<Vector2f> targetCloud);
-  LookupTable GetLookupTableHighRes(const vector<Vector2f>& pointcloud);
-  LookupTable GetLookupTableLowRes(const LookupTable& high_res_table);
+  bool GetTransform(
+    const vector<Vector2f> &pointcloud_a,
+    const vector<Vector2f> &pointcloud_b,
+    const Trans &odom,
+    pair<Trans, Eigen::Matrix3f> &results);
 
  private:
-  LookupTable GetLookupTable(const vector<Vector2f>& pointcloud,
-                             double resolution);
-  TransProb GetProbAndTransformation(
-      const vector<Vector2f>& pointcloud_a, const LookupTable& pointcloud_b_cost,
-      double resolution, double x_min, double x_max, double y_min, double y_max,
-      double rotation);
+  static vector<Vector2f> RotatePointcloud(
+    const vector<Vector2f> &pointcloud, const double rotation);
+  static double CalculatePointcloudCost(
+    const vector<Vector2f> &pointcloud, const double x_trans,
+    const double y_trans, const CostTable &cost_table);
+  CostTable CostTableFromPointCloud(const vector<Vector2f> &pointcloud);
+  void GenerateSearchParams(
+    vector<pair<double, double>> &tranlations, vector<double> &rotations,
+    const Trans &odom);
   double EvaluateMotionModel(const Trans &trans, const Trans &odom);
   double scanner_range_;
   double trans_range_;
-  double low_res_;
-  double high_res_;
+  double resolution;
   float k1_, k2_, k3_, k4_;
 };
 
-#endif  // SRC_SLAM_CORRELATIVESCANMATCHER_H_
+#endif  // SRC_SLAM_CSM_H_
