@@ -28,7 +28,7 @@ SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 SET(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 
 SET(libs roslib roscpp rosbag glog gflags amrl-shared-lib boost_system lua5.1
-    pthread)
+    pthread X11)
 
 ADD_LIBRARY(shared_library
             src/visualization/visualization.cc
@@ -40,8 +40,9 @@ INCLUDE_DIRECTORIES(src)
 
 ROSBUILD_ADD_EXECUTABLE(slam
                         src/slam/slam_main.cc
-                        src/slam/slam.cc)
-TARGET_LINK_LIBRARIES(slam shared_library ${libs})
+                        src/slam/slam.cc
+                        src/slam/CorrelativeScanMatcher.cc src/slam/pg_node.cc)
+TARGET_LINK_LIBRARIES(slam shared_library ${libs} gtsam)
 
 
 ROSBUILD_ADD_EXECUTABLE(particle_filter
@@ -63,3 +64,9 @@ ADD_EXECUTABLE(simple_queue_test
 ADD_EXECUTABLE(cimg_example
                src/cimg_example.cc)
 TARGET_LINK_LIBRARIES(cimg_example shared_library ${libs} X11)
+
+ROSBUILD_ADD_EXECUTABLE(stopSlam src/controlSlam/stopSlam_main.cc)
+TARGET_LINK_LIBRARIES(stopSlam shared_library ${libs})
+
+ROSBUILD_ADD_EXECUTABLE(listen_rosbag_pose src/listen_rosbag_pose.cc)
+TARGET_LINK_LIBRARIES(listen_rosbag_pose shared_library ${libs})
